@@ -6,6 +6,8 @@ listo para conectar al SDK `google-genai`.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException
 from google import genai
@@ -49,7 +51,7 @@ def chat(payload: ChatIn) -> dict:
 
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
-        tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
+        tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],  # type: ignore[arg-type]
     )
 
     # Loop de tool-use: si Gemini pide una tool, la ejecutamos y devolvemos el resultado.
@@ -63,18 +65,22 @@ def chat(payload: ChatIn) -> dict:
             return {"role": "assistant", "content": response.text or ""}
 
         # Añadir la respuesta del modelo (con function_call) a la conversación
-        contents.append(response.candidates[0].content)
+        candidates = response.candidates or []
+        if not candidates or candidates[0].content is None:
+            raise HTTPException(status_code=500, detail="Gemini response missing candidate content")
+        contents.append(candidates[0].content)
 
         # Ejecutar cada tool y devolver el resultado
         for call in function_calls:
-            fn = TOOL_FUNCTIONS.get(call.name)
+            name = call.name or ""
+            fn = cast(Callable[..., dict[str, Any]] | None, TOOL_FUNCTIONS.get(name))
             if fn is None:
-                result = {"error": f"unknown tool: {call.name}"}
+                result = {"error": f"unknown tool: {name}"}
             else:
                 try:
                     result = fn(**(call.args or {}))
                 except NotImplementedError:
-                    result = {"error": f"tool {call.name} not yet implemented"}
+                    result = {"error": f"tool {name} not yet implemented"}
                 except Exception as e:  # noqa: BLE001 — surface to model
                     result = {"error": str(e)}
 
@@ -82,7 +88,7 @@ def chat(payload: ChatIn) -> dict:
                 types.Content(
                     role="user",
                     parts=[
-                        types.Part.from_function_response(name=call.name, response=result)
+                        types.Part.from_function_response(name=name, response=result)
                     ],
                 )
             )
