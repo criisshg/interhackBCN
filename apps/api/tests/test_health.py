@@ -30,17 +30,24 @@ def seed_data() -> None:
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
-        session.add(Client(id=1, codigo_postal="08001", provincia="Barcelona"))
-        session.add(Client(id=2, codigo_postal="28001", provincia="Madrid"))
-        session.add(Product(sku="A1", subfamilia="Categoria C1", familia="Familia C1", es_commodity=True))
+        session.add(Client(client_id=1, region_code="08001", province="Barcelona"))
+        session.add(Client(client_id=2, region_code="28001", province="Madrid"))
+        session.add(
+            Product(
+                product_id="A1",
+                analytical_block="Commodities",
+                category="Categoria C1",
+                subfamily="Familia C1",
+            )
+        )
         session.add(
             Transaction(
-                id=1,
+                transaction_id=1,
+                date=date(2026, 5, 1),
                 client_id=1,
-                sku="A1",
-                fecha=date(2026, 5, 1),
-                unidades=3,
-                valor=120.0,
+                product_id="A1",
+                units=3,
+                value=120.0,
             )
         )
         session.add(
@@ -102,7 +109,7 @@ def test_get_alert_detail() -> None:
     r = client.get("/alerts/10")
     assert r.status_code == 200
     body = r.json()
-    assert body["cliente"]["provincia"] == "Barcelona"
+    assert body["cliente"]["province"] == "Barcelona"
     assert body["features_json"] == {"sow": 0.42}
 
 
@@ -118,8 +125,8 @@ def test_get_client_profile_timeline_and_alerts() -> None:
     r = client.get("/clients/1")
     assert r.status_code == 200
     body = r.json()
-    assert body["provincia"] == "Barcelona"
-    assert body["timeline"][0]["sku"] == "A1"
+    assert body["province"] == "Barcelona"
+    assert body["timeline"][0]["product_id"] == "A1"
     assert body["alerts"][0]["id"] == 10
 
 

@@ -13,6 +13,7 @@ def list_alerts(
     tipo: str | None = None,
     tipologia: str | None = None,
     provincia: str | None = None,
+    province: str | None = None,
     subfamilia: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -28,10 +29,11 @@ def list_alerts(
         filters.append(Alert.tipologia_cliente == tipologia)
     if subfamilia:
         filters.append(Alert.subfamilia == subfamilia)
-    if provincia:
-        filters.append(Client.provincia == provincia)
+    province_filter = province or provincia
+    if province_filter:
+        filters.append(Client.province == province_filter)
 
-    join_condition = col(Alert.client_id) == col(Client.id)
+    join_condition = col(Alert.client_id) == col(Client.client_id)
     statement = select(Alert, Client).join(Client, join_condition)
     count_statement = select(func.count()).select_from(Alert).join(Client, join_condition)
     for condition in filters:
@@ -54,7 +56,7 @@ def list_alerts(
 def get_alert(alert_id: int, session: Session = Depends(get_session)) -> dict:
     row = session.exec(
         select(Alert, Client)
-        .join(Client, col(Alert.client_id) == col(Client.id))
+        .join(Client, col(Alert.client_id) == col(Client.client_id))
         .where(Alert.id == alert_id)
     ).first()
     if row is None:
@@ -73,8 +75,10 @@ def _alert_item(alert: Alert, client: Client) -> dict:
         "id": alert.id,
         "fecha": alert.fecha.isoformat(),
         "client_id": alert.client_id,
-        "provincia": client.provincia,
-        "codigo_postal": client.codigo_postal,
+        "province": client.province,
+        "provincia": client.province,
+        "region_code": client.region_code,
+        "codigo_postal": client.region_code,
         "subfamilia": alert.subfamilia,
         "tipo_dinamica": alert.tipo_dinamica,
         "tipologia_cliente": alert.tipologia_cliente,
@@ -91,9 +95,13 @@ def _alert_item(alert: Alert, client: Client) -> dict:
 
 def _client_snapshot(client: Client) -> dict:
     return {
-        "id": client.id,
-        "codigo_postal": client.codigo_postal,
-        "provincia": client.provincia,
+        "id": client.client_id,
+        "client_id": client.client_id,
+        "region_code": client.region_code,
+        "codigo_postal": client.region_code,
+        "province": client.province,
+        "provincia": client.province,
         "clinic_segment": client.clinic_segment,
-        "delegado_inferido": client.delegado_inferido,
+        "inferred_sales_rep": client.inferred_sales_rep,
+        "delegado_inferido": client.inferred_sales_rep,
     }

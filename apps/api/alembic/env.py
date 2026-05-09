@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 import models  # noqa: F401
+
+API_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(API_DIR.parent.parent / ".env")
+load_dotenv(API_DIR / ".env")
 
 config = context.config
 

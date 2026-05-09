@@ -15,9 +15,9 @@ def get_client(client_id: int, session: Session = Depends(get_session)) -> dict:
 
     timeline_rows = session.exec(
         select(Transaction, Product)
-        .join(Product, col(Transaction.sku) == col(Product.sku))
+        .join(Product, col(Transaction.product_id) == col(Product.product_id))
         .where(Transaction.client_id == client_id)
-        .order_by(col(Transaction.fecha).desc())
+        .order_by(col(Transaction.date).desc())
         .limit(200)
     ).all()
     alerts = session.exec(
@@ -28,11 +28,15 @@ def get_client(client_id: int, session: Session = Depends(get_session)) -> dict:
     ).all()
 
     return {
-        "id": client.id,
-        "codigo_postal": client.codigo_postal,
-        "provincia": client.provincia,
+        "id": client.client_id,
+        "client_id": client.client_id,
+        "region_code": client.region_code,
+        "codigo_postal": client.region_code,
+        "province": client.province,
+        "provincia": client.province,
         "clinic_segment": client.clinic_segment,
-        "delegado_inferido": client.delegado_inferido,
+        "inferred_sales_rep": client.inferred_sales_rep,
+        "delegado_inferido": client.inferred_sales_rep,
         "timeline": [_timeline_item(transaction, product) for transaction, product in timeline_rows],
         "alerts": [_alert_item(alert) for alert in alerts],
     }
@@ -40,13 +44,20 @@ def get_client(client_id: int, session: Session = Depends(get_session)) -> dict:
 
 def _timeline_item(transaction: Transaction, product: Product) -> dict:
     return {
-        "id": transaction.id,
-        "fecha": transaction.fecha.isoformat(),
-        "sku": transaction.sku,
-        "familia": product.familia,
-        "subfamilia": product.subfamilia,
-        "unidades": transaction.unidades,
-        "valor": transaction.valor,
+        "id": transaction.transaction_id,
+        "transaction_id": transaction.transaction_id,
+        "date": transaction.date.isoformat(),
+        "fecha": transaction.date.isoformat(),
+        "product_id": transaction.product_id,
+        "sku": transaction.product_id,
+        "analytical_block": product.analytical_block,
+        "category": product.category,
+        "subfamily": product.subfamily,
+        "subfamilia": product.subfamily,
+        "units": transaction.units,
+        "unidades": transaction.units,
+        "value": transaction.value,
+        "valor": transaction.value,
         "is_return": transaction.is_return,
         "is_zero": transaction.is_zero,
         "is_outlier": transaction.is_outlier,
