@@ -16,6 +16,7 @@ def detect_commodity_signals(
     products: pd.DataFrame,
     today: pd.Timestamp | None = None,
     k_std: float = 1.0,
+    z_percentile_min: float = 0.0,
 ) -> pd.DataFrame:
     """Devuelve DataFrame con columnas alineadas al schema de `alerts`."""
     ventas = transactions[(~transactions["is_return"]) & (~transactions["is_zero"])].copy()
@@ -79,8 +80,11 @@ def detect_commodity_signals(
         prioridad_dinamica = 0.0
         
         # Regla CAPTURA
-        # Mantenemos un umbral básico (z_score > 1.0) para considerarlo anomalía
-        if row['tipologia'] in ['promiscuous', 'marginal'] and row['z_score'] > k_std:
+        if (
+            row['tipologia'] in ['promiscuous', 'marginal']
+            and row['z_score'] > k_std
+            and row['z_percentile'] >= z_percentile_min
+        ):
             tipo = 'CAPTURA'
             motivo = f"Retraso de {row['days_since_last']} días (Media: {row['mean_days']:.0f} días). Su retraso es mayor al {row['z_percentile']:.0f}% de los clientes de esta familia."
             prioridad_dinamica = row['z_percentile']

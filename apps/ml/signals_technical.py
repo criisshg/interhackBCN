@@ -17,6 +17,7 @@ def detect_technical_signals(
     min_periods: int = 6,
     consecutive_below: int = 3,
     k_std: float = 1.0,
+    drop_pct_min: float = 0.0,
 ) -> pd.DataFrame:
     """Devuelve DataFrame con columnas alineadas al schema de `alerts`."""
     ventas = transactions[(~transactions["is_return"]) & (~transactions["is_zero"])].copy()
@@ -66,26 +67,28 @@ def detect_technical_signals(
         if len(last_m_months) == consecutive_below:
             is_below = (last_m_months['value'] <= last_m_lower).all()
             
-            if is_below and last_m_baseline.mean() > 100: # Solo si el baseline era significativo
-                # Obtener la tipologia
+            if is_below and last_m_baseline.mean() > 100:
                 tip_df = tipologia[(tipologia['client_id'] == cid) & (tipologia['subfamily'] == subf)]
                 tip = tip_df['tipologia'].iloc[0] if not tip_df.empty else 'marginal'
-                
-                # Exigimos que fuera un cliente decente para preocuparnos del deterioro
+
                 if tip in ['loyal', 'promiscuous', 'at_risk']:
                     import json
-                    
+
                     mean_val = float(last_m_baseline.iloc[-1]) if not np.isnan(last_m_baseline.iloc[-1]) else 0.0
                     curr_val = float(last_m_months['value'].mean())
-                    
+                    drop_pct = float(1 - (curr_val / mean_val)) if mean_val > 0 else 0.0
+
+                    if drop_pct < drop_pct_min:
+                        continue
+
                     features = {
                         "baseline_6m": mean_val,
                         "recent_3m_avg": curr_val,
-                        "drop_pct": float(1 - (curr_val/mean_val)) if mean_val > 0 else 0
+                        "drop_pct": drop_pct,
                     }
-                    
+
                     motivo = f"Deterioro sostenido: Lleva {consecutive_below} meses comprando muy por debajo de su media (Media={mean_val:.0f}€, Actual={curr_val:.0f}€)."
-                    
+
                     alerts.append({
                         'client_id': cid,
                         'subfamily': subf,
