@@ -1,4 +1,4 @@
-.PHONY: setup dev seed check deploy api web ml install recalc
+.PHONY: setup dev seed check deploy api web ml install recalc test-chat chat-repl
 
 # === Setup ===
 # Quick setup para todo el equipo. Detecta SO automáticamente.
@@ -35,6 +35,13 @@ recalc:
 	cd apps/ml && python -m run_signals
 
 # === Quality ===
+
+test-chat:
+	python scripts/test_chat.py
+
+chat-repl:
+	python scripts/chat_repl.py
+
 check:
 	cd apps/api && ruff check . && mypy . && pytest -q
 	cd apps/ml && ruff check . && mypy .
