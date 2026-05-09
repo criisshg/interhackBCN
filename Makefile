@@ -1,7 +1,7 @@
 .PHONY: help setup install dev api web bootstrap \
         db-up db-start db-stop db-reset db-logs db-check \
         migrate seed recalc \
-        test-gemini test-chat check deploy
+        test-gemini test-chat chat-repl check deploy
 
 # === Help ===
 help:
@@ -109,6 +109,9 @@ test-gemini:
 
 test-chat:
 	python scripts/test_chat.py
+
+chat-repl:
+	python scripts/chat_repl.py
 
 check:
 	cd apps/api && ruff check . && mypy . && pytest -q
