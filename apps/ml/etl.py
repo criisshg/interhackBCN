@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from io import StringIO
 
 import numpy as np
 import pandas as pd
@@ -186,19 +187,20 @@ def main() -> None:
     from sqlalchemy import text
     try:
         with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE clients CASCADE"))
-            conn.execute(text("TRUNCATE TABLE products CASCADE"))
-            conn.execute(text("TRUNCATE TABLE client_potential CASCADE"))
-            conn.execute(text("TRUNCATE TABLE transactions CASCADE"))
-            conn.execute(text("TRUNCATE TABLE campaigns CASCADE"))
+            conn.execute(text("SET statement_timeout = 0"))
+            conn.execute(text(
+                "TRUNCATE TABLE actions, alerts, client_status, transactions, "
+                "client_potential, campaigns, products, clients "
+                "RESTART IDENTITY CASCADE"
+            ))
     except Exception as e:
         print(f"Nota: No se pudieron truncar las tablas (probablemente SQLite vacío). Error: {e}")
 
-    raw["clientes"].to_sql("clients", engine, if_exists="append", index=False)
-    raw["productos"].to_sql("products", engine, if_exists="append", index=False)
-    potencial.to_sql("client_potential", engine, if_exists="append", index=False)
-    ventas.to_sql("transactions", engine, if_exists="append", index=False)
-    raw["campanas"].to_sql("campaigns", engine, if_exists="append", index=False)
+    write_table(raw["clientes"], "clients", engine)
+    write_table(raw["productos"], "products", engine)
+    write_table(potencial, "client_potential", engine)
+    write_table(ventas, "transactions", engine)
+    write_table(raw["campanas"], "campaigns", engine)
     
     print("ETL completada con éxito. Tablas guardadas en la base configurada.")
     
@@ -215,6 +217,29 @@ def main() -> None:
     print("="*50)
     for table, cols in schema_info.items():
         print(f"Tabla '{table}': {', '.join(cols)}")
+
+
+def write_table(df: pd.DataFrame, table_name: str, engine) -> None:
+    if engine.dialect.name != "postgresql":
+        df.to_sql(table_name, engine, if_exists="append", index=False)
+        return
+
+    buffer = StringIO()
+    df.to_csv(buffer, index=False, header=False, na_rep="", date_format="%Y-%m-%d")
+    buffer.seek(0)
+    columns = ", ".join(f'"{column}"' for column in df.columns)
+    sql = f'COPY "{table_name}" ({columns}) FROM STDIN WITH (FORMAT CSV, NULL \'\')'
+
+    raw_connection = engine.raw_connection()
+    try:
+        with raw_connection.cursor() as cursor:
+            cursor.copy_expert(sql, buffer)
+        raw_connection.commit()
+    except Exception:
+        raw_connection.rollback()
+        raise
+    finally:
+        raw_connection.close()
 
 
 if __name__ == "__main__":
