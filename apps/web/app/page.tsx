@@ -1389,10 +1389,10 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
 /* ---------------- Chat ---------------- */
 
 const SUGGESTIONS = [
-  "Top urgent alerts",
-  "At-risk clients in Madrid",
-  "Draft a recovery email",
-  "Explain alert #142",
+  "Dame las 5 alertas más prioritarias",
+  "Alertas en Barcelona",
+  "Explica la alerta 2018",
+  "Redacta un email para el cliente 1000077009",
 ];
 
 type ChatBubble =
@@ -1402,30 +1402,10 @@ type ChatBubble =
   | { role: "bot"; kind: "email"; subject: string; body: string[] };
 
 const SEED: ChatBubble[] = [
-  { role: "user", text: "What are the most urgent alerts in Barcelona?" },
   {
     role: "bot",
-    kind: "table",
-    intro: "Barcelona triage, P0 sorted by urgency:",
-    rows: [
-      ["#142", "CL-4821", "Technical", "3d"],
-      ["#098", "CL-3307", "Commodity", "4d"],
-      ["#087", "CL-7710", "Technical", "6d"],
-    ],
-    foot: "I would prioritize #142 — sustained decline in Anesthetics with high estimated impact.",
-  },
-  { role: "user", text: "Draft a recovery email for client 4821" },
-  {
-    role: "bot",
-    kind: "email",
-    subject: "Subject: Reviewing your anesthesia needs",
-    body: [
-      "Hi team,",
-      "We have noticed a sustained drop in your anesthetic restocks compared to your usual pattern. We wanted to check whether it is due to a change in clinical planning, on-hand stock, or new product needs.",
-      "Would a quick call this week work to plan the next reorder and avoid stockouts?",
-      "Best,",
-      "Inibsa team",
-    ],
+    kind: "plain",
+    text: "Estoy conectado a las alertas reales. Pregúntame por prioridades, provincias, clientes o borradores comerciales.",
   },
 ];
 
@@ -1485,15 +1465,15 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
           {
             role: "bot",
             kind: "plain",
-            text: `Found 4 records related to "${t}". Want me to open the most urgent one or prepare an executive summary?`,
+            text: `No he podido consultar el backend para "${t}". Revisa que la API esté despierta y vuelve a intentarlo.`,
           },
         ]);
       });
   };
 
   const fillChip = (s: string) => {
-    if (s.startsWith("Draft")) send("Draft a recovery email for client CL-4821");
-    else if (s.startsWith("Explain")) send("Explain the logic behind alert #142");
+    if (s.startsWith("Redacta")) send("Redacta un email de recuperación para el cliente 1000077009");
+    else if (s.startsWith("Explica")) send("Explica la alerta 2018");
     else send(s);
   };
 
