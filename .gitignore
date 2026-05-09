@@ -1,8 +1,7 @@
-# --- Datos sensibles ---
-data/raw/*
-!data/raw/.gitkeep
+# --- Datos ---
+# CSVs de Inibsa incluidos en el repo (decisión del equipo · ver TEAM.md).
+# Sí ignoramos derivados generados localmente:
 data/processed/
-*.xlsx
 *.parquet
 
 # --- Python ---

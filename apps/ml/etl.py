@@ -18,13 +18,13 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
 
 
 def load_csvs() -> dict[str, pd.DataFrame]:
-    """Carga los 5 CSVs. Los nombres exactos los confirma P1 al abrirlos."""
+    """Carga los 5 CSVs entregados por Inibsa."""
     return {
         "ventas": pd.read_csv(DATA_DIR / "ventas.csv"),
         "productos": pd.read_csv(DATA_DIR / "productos.csv"),
         "clientes": pd.read_csv(DATA_DIR / "clientes.csv"),
         "potencial": pd.read_csv(DATA_DIR / "potencial.csv"),
-        "campanas": pd.read_csv(DATA_DIR / "campanas.csv"),
+        "campanas": pd.read_csv(DATA_DIR / "campañas.csv"),
     }
 
 
