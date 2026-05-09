@@ -135,6 +135,9 @@ def clean_potencial(df: pd.DataFrame, ventas: pd.DataFrame, productos: pd.DataFr
 
 
 def main() -> None:
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     # Obtener URL o usar SQLite local para pruebas si no hay DATABASE_URL configurada en el .env
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:

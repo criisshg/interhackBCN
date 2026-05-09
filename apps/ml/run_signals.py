@@ -18,6 +18,9 @@ from signals_technical import detect_technical_signals
 
 
 def main() -> dict[str, int]:
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         db_path = Path(__file__).resolve().parent.parent.parent / "pulse_dev.db"
@@ -64,11 +67,11 @@ def main() -> dict[str, int]:
     alerts['estado'] = 'pending'
     alerts['date_created'] = datetime.datetime.now()
     
-    # Prioridad básica para el MVP: DETERIORO > CAPTURA > REPOSICION
-    alerts['prioridad_score'] = 1.0
-    alerts.loc[alerts['tipo'] == 'REPOSICION', 'prioridad_score'] = 5.0
-    alerts.loc[alerts['tipo'] == 'CAPTURA', 'prioridad_score'] = 8.0
-    alerts.loc[alerts['tipo'] == 'DETERIORO_SOSTENIDO', 'prioridad_score'] = 10.0
+    # Prioridad: Si no viene calculada del motor (ej: technical), asignar defaults
+    if 'prioridad_score' not in alerts.columns:
+        alerts['prioridad_score'] = 1.0
+        
+    alerts.loc[(alerts['tipo'] == 'DETERIORO_SOSTENIDO') & (alerts['prioridad_score'].isna() | (alerts['prioridad_score'] == 0)), 'prioridad_score'] = 99.0
     
     print(f"6. Guardando {len(alerts)} alertas en base de datos...")
     alerts.to_sql("alerts", engine, if_exists="replace", index=False)
