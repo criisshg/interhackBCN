@@ -42,6 +42,9 @@ def main() -> dict[str, int]:
     print("2. Clasificando clientes...")
     tipologia = classify_client_subfam(transactions, potential, products)
     
+    print("2.5 Guardando estado global de clientes para gráficas del Frontend...")
+    tipologia.to_sql("client_status", engine, if_exists="replace", index=False)
+    
     print("3. Generando señales Commodity...")
     alerts_comm = detect_commodity_signals(transactions, tipologia, products)
     
