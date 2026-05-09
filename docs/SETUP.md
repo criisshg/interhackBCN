@@ -53,7 +53,7 @@ Si todo va, abre <http://localhost:3000> (web) y <http://localhost:8000/docs> (A
 | **Google AI Studio** ([aistudio.google.com](https://aistudio.google.com/apikey)) | todos | API key personal de Gemini |
 | **GitHub** | todos | acceso al repo |
 | **Vercel** | P3, P5 | despliegue del frontend |
-| **Railway** | P2, P5 | despliegue de la API + Postgres |
+| **Render** | P2, P5 | despliegue de la API + Postgres · https://interhackbcn.onrender.com |
 | **n8n cloud** | P5 | extra opcional E2 |
 | **ElevenLabs** ([elevenlabs.io](https://elevenlabs.io)) | P3 | API key personal para voice |
 
@@ -470,7 +470,7 @@ make test-chat        # end-to-end (necesita API levantada en otra terminal)
 Tu trabajo es `infra/`, despliegue, slides, demo. Para deploy manual:
 
 ```bash
-git push origin main   # CI deploya auto en Vercel y Railway
+git push origin main   # CI deploya auto en Vercel y Render
 ```
 
 ---

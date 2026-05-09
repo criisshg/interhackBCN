@@ -52,7 +52,7 @@ Stack:
 - `apps/ml`: Python · pandas · scikit-learn · DuckDB (EDA)
 - `apps/api`: FastAPI sobre Postgres + chat (Gemini function calling)
 - `apps/web`: Next.js 14 + shadcn/ui + Recharts (Vercel)
-- `infra/`: Railway (API + Postgres), Vercel (front), n8n cloud (extra opcional)
+- `infra/`: Render (API + Postgres), Vercel (front), n8n cloud (extra opcional)
 
 ## Datos y dominio
 
@@ -149,7 +149,7 @@ Si en demo no hay datos reales de `actions`, poblar con sintéticos plausibles y
 - Branches por persona (`p1-ml`, `p2-api`, `p3-web`, `p4-agent`, `p5-infra`).
 - PRs pequeños, squash a `main`. P5 mantiene `main`.
 - `make check` (lint + tipos + build) antes de push.
-- Variables de entorno en `.env.example` por paquete; secretos en Railway/Vercel.
+- Variables de entorno en `.env.example` por paquete; secretos en Render/Vercel.
 - Commits en imperativo, en inglés.
 - **Sin código defensivo innecesario, sin abstracciones prematuras, sin
   comentarios redundantes**. Trust internal calls. Tres líneas duplicadas son OK.
@@ -160,7 +160,7 @@ Si en demo no hay datos reales de `actions`, poblar con sintéticos plausibles y
 - `make dev` — levanta API + Web en local
 - `make seed` — carga los CSVs en Postgres local
 - `make check` — lint + tipos + tests
-- `make deploy` — push a main (CI auto-deploy en Vercel + Railway)
+- `make deploy` — push a main (CI auto-deploy en Vercel + Render)
 
 ## Roles
 
@@ -174,16 +174,16 @@ Si en demo no hay datos reales de `actions`, poblar con sintéticos plausibles y
 
 ### Gemini API (chatbot LLM)
 - Reemplaza Anthropic Codex. SDK: `google-generativeai`.
-- Modelo: `GEMINI_MODEL` (default: `gemini-2.0-flash`). Variable en Railway + `.env.example`.
+- Modelo: `GEMINI_MODEL` (default: `gemini-2.0-flash`). Variable en Render + `.env.example`.
 - Function calling con 4 tools en `apps/api/agent/tools.py` (formato `genai.protos`).
 - Loop implementado en `apps/api/routers/chat.py`: `send_message` → si hay `function_call` → ejecutar tool → enviar `FunctionResponse` → repetir hasta texto.
-- Clave: `GEMINI_API_KEY` (Railway secret + `.env.example`).
+- Clave: `GEMINI_API_KEY` (Render secret + `.env.example`).
 
 ### ElevenLabs (voz del chatbot)
 - TTS del response del agente. SDK: `elevenlabs`.
 - Endpoint: `POST /voice` → body `{text, voice_id?}` → devuelve `audio/mpeg` en streaming.
 - Voz configurable via `ELEVENLABS_VOICE_ID` (default Rachel `21m00Tcm4TlvDq8ikWAM`), modelo `eleven_multilingual_v2`.
-- Claves: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (Railway secrets).
+- Claves: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (Render secrets).
 - El front llama `POST /voice` al recibir un mensaje del agente y reproduce el blob de audio.
 
 ### Solana (opcional)

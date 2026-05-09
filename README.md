@@ -10,7 +10,7 @@ clasificando clientes en leales / promiscuos / riesgo de fuga.
 - **`apps/ml/`** — Capa de datos + capa analítica (ETL + motor de señales)
 - **`apps/api/`** — Capa de activación · API REST + agente conversacional
 - **`apps/web/`** — Dashboard Next.js (Vercel)
-- **`infra/`** — n8n workflow (extra opcional), config Railway/Vercel
+- **`infra/`** — n8n workflow (extra opcional), config Render/Vercel
 - **`data/raw/`** — CSVs de Inibsa (no versionados, ver `.gitignore`)
 
 ## Quick setup (1 comando)
@@ -59,7 +59,7 @@ GEMINI_API_KEY=...   # generar en https://aistudio.google.com/apikey
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Para producción (Railway + Vercel) los valores los configura Ger (P5) en cada plataforma.
+Para producción (Render + Vercel) los valores los configura Ger (P5) en cada plataforma.
 
 ## Equipo (DATA PENTAKILL)
 
@@ -82,4 +82,4 @@ de desarrollo. Plan de ejecución en
 ## Deploys
 
 - Frontend: Vercel — _pendiente de configurar_
-- API + DB: Railway — _pendiente de configurar_
+- API + DB: Render — https://interhackbcn.onrender.com

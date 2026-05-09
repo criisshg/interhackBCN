@@ -33,7 +33,7 @@
 - [ ] Python 3.11+
 - [ ] Postgres local instalado (o Docker para levantarlo) · `psql --version`
 - [ ] `pip install -e apps/api` con extras dev
-- [ ] Cuenta Railway creada y verificada
+- [ ] Cuenta Render creada y verificada
 - [ ] Familiarizarse con SQLModel + Alembic si no los ha usado
 
 ### el Cid · P3
@@ -54,11 +54,11 @@
 
 ### Ger · P5
 
-- [ ] Cuenta Railway + Vercel + n8n cloud creadas
+- [ ] Cuenta Render + Vercel + n8n cloud creadas
 - [ ] Acceso admin al repo (puede mergear PRs y proteger `main`)
 - [ ] OBS Studio instalado para grabar video backup
 - [ ] Plantilla de slides preparada (Keynote / Google Slides / Pitch.com)
-- [ ] **Comprar dominio si quieres uno bonito** (`pulse-inibsa.com` ~10 €) o usar `*.vercel.app` y `*.up.railway.app` por defecto
+- [ ] **Comprar dominio si quieres uno bonito** (`pulse-inibsa.com` ~10 €) o usar `*.vercel.app` e `interhackbcn.onrender.com` por defecto
 - [ ] Crear board en Linear o Trello con las columnas: Backlog · F0 · F1 · F2 · F3 · F4 · Demo
 
 ## Tareas detalladas por persona
@@ -114,7 +114,7 @@
 #### F0 (h0–h3) · scaffolding API
 - [ ] `cd apps/api && pip install -e .[dev]`
 - [ ] Verificar que `uvicorn main:app --reload` arranca y `/health` responde 200
-- [ ] **Crear servicio Postgres en Railway** (con Ger). Apuntar `DATABASE_URL` correctamente
+- [ ] **Verificar servicio Postgres en Render** (con Ger). Apuntar `DATABASE_URL` correctamente
 - [ ] Schema preliminar con SQLModel (`apps/api/models.py` ya existe, **revisar y ajustar**)
 - [ ] Configurar Alembic: `alembic init alembic` + primera migración
 
@@ -225,10 +225,10 @@
 ### GER · P5 · Infra + Demo Lead
 
 #### F0 (h0–h3) · cuentas y CI/CD
-- [ ] Crear proyecto en Railway (Postgres + servicio API). Compartir `DATABASE_URL` con Big Yahu
+- [ ] Crear/verificar proyecto en Render (Postgres + servicio API). Compartir `DATABASE_URL` con Big Yahu · https://interhackbcn.onrender.com
 - [ ] Crear proyecto en Vercel y linkear repo. Apuntar a `apps/web/` como root
 - [ ] Variables de entorno en cada plataforma (lista en `.env.example` de cada paquete)
-- [ ] Dominio (si lo tienes) o anotar URLs `*.vercel.app` y `*.up.railway.app`
+- [ ] Anotar URLs: frontend `*.vercel.app` · API `interhackbcn.onrender.com`
 - [ ] GitHub Actions trivial: lint + build en cada PR (no obligatorio si va apurado)
 - [ ] `make dev` y `make seed` deben funcionar para los demás
 - [ ] Crear board en Linear/Trello con columnas F0 / F1 / F2 / F3 / F4 / Demo
