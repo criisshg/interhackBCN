@@ -22,44 +22,54 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
     """Carga los 5 CSVs entregados por Inibsa y estandariza los nombres de columnas."""
     
     # 1. Ventas
-    ventas = pd.read_csv(DATA_DIR / "ventas.csv", encoding='latin1', on_bad_lines='skip', low_memory=False)
+    ventas = pd.read_csv(DATA_DIR / "ventas.csv", on_bad_lines='skip', low_memory=False)
     ventas = ventas.rename(columns={
-        'Num.Fact': 'transaction_id',
         'Fecha': 'date',
         'Id. Cliente': 'client_id',
         'Id. Producto': 'product_id',
         'Unidades': 'units',
         'Valores_H': 'value'
     })
+    # Num.Fact identifica factura y puede repetirse en varias líneas. La tabla necesita
+    # una PK por línea de transacción, así que generamos un id estable por fila.
+    ventas.insert(0, 'transaction_id', range(1, len(ventas) + 1))
+    ventas = ventas.drop(columns=['Num.Fact'])
+    ventas['client_id'] = ventas['client_id'].astype(int)
+    ventas['product_id'] = ventas['product_id'].astype(str)
     # Limpiar moneda
     ventas['value'] = ventas['value'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     ventas['date'] = pd.to_datetime(ventas['date'], format='%m/%d/%Y', errors='coerce').dt.date
     
     # 2. Productos
-    productos = pd.read_csv(DATA_DIR / "productos.csv", encoding='latin1')
+    productos = pd.read_csv(DATA_DIR / "productos.csv")
     productos.columns = ['product_id', 'analytical_block', 'category', 'subfamily']
+    productos['product_id'] = productos['product_id'].astype(str)
     
     # 3. Clientes
-    clientes = pd.read_csv(DATA_DIR / "clientes.csv", encoding='latin1')
+    clientes = pd.read_csv(DATA_DIR / "clientes.csv", dtype={'Unnamed: 1': 'string'})
     clientes = clientes.rename(columns={
         'Id. Cliente': 'client_id',
         'Unnamed: 1': 'region_code',
         'Provincia': 'province'
     })
+    clientes['client_id'] = clientes['client_id'].astype(int)
+    clientes['region_code'] = clientes['region_code'].astype('string').str.zfill(5)
+    clientes = clientes.drop_duplicates(subset=['client_id'], keep='first')
     
     # 4. Potencial
-    potencial = pd.read_csv(DATA_DIR / "potencial.csv", encoding='latin1')
+    potencial = pd.read_csv(DATA_DIR / "potencial.csv")
     potencial = potencial.rename(columns={
         'Id.Cliente': 'client_id',
         'Familia': 'family',
         'Categoria Productos': 'category',
-        'Potencial_H': 'potential_value'
+        'Potencial_H': 'potential_annual'
     })
+    potencial['client_id'] = potencial['client_id'].astype(int)
     # Limpiar moneda y NaN
-    potencial['potential_value'] = potencial['potential_value'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+    potencial['potential_annual'] = potencial['potential_annual'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     
     # 5. Campañas
-    campanas = pd.read_csv(DATA_DIR / "campañas.csv", encoding='latin1')
+    campanas = pd.read_csv(DATA_DIR / "campañas.csv")
     campanas = campanas.rename(columns={
         'Campaña': 'campaign_id',
         'Fecha inicio': 'start_date',
@@ -67,6 +77,21 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
     })
     campanas['start_date'] = pd.to_datetime(campanas['start_date'], format='%m/%d/%Y', errors='coerce').dt.date
     campanas['end_date'] = pd.to_datetime(campanas['end_date'], format='%m/%d/%Y', errors='coerce').dt.date
+
+    # Algunas tablas de negocio contienen clientes que no vienen en la maestra
+    # `clientes.csv`. Para mantener claves foráneas sin perder ventas/potencial,
+    # añadimos esos IDs con localización desconocida.
+    all_client_ids = pd.Index(clientes['client_id'])
+    all_client_ids = all_client_ids.union(pd.Index(ventas['client_id']))
+    all_client_ids = all_client_ids.union(pd.Index(potencial['client_id']))
+    missing_client_ids = all_client_ids.difference(pd.Index(clientes['client_id']))
+    if len(missing_client_ids) > 0:
+        missing_clients = pd.DataFrame({
+            'client_id': missing_client_ids.astype(int),
+            'region_code': pd.NA,
+            'province': pd.NA,
+        })
+        clientes = pd.concat([clientes, missing_clients], ignore_index=True)
 
     return {
         "ventas": ventas,
@@ -105,8 +130,8 @@ def clean_potencial(df: pd.DataFrame, ventas: pd.DataFrame, productos: pd.DataFr
     """Marca calidad del potencial comparándolo con ventas reales."""
     df = df.copy()
     df["potential_quality"] = "ok"
-    df.loc[df["potential_value"].isna(), "potential_quality"] = "low"
-    df.loc[df["potential_value"] <= 0, "potential_quality"] = "low"
+    df.loc[df["potential_annual"].isna(), "potential_quality"] = "low"
+    df.loc[df["potential_annual"] <= 0, "potential_quality"] = "low"
     
     # Cruzar ventas con productos para sacar la categoría de cada venta
     ventas_prod = ventas[~ventas["is_return"]].copy()
@@ -127,7 +152,7 @@ def clean_potencial(df: pd.DataFrame, ventas: pd.DataFrame, productos: pd.DataFr
     
     # Si sus ventas reales en UN SOLO AÑO ya superan el potencial actual estimado, el potencial está mal calculado (se queda corto)
     df.loc[
-        merged["max_annual_value"].notna() & (df["potential_value"] < merged["max_annual_value"]),
+        merged["max_annual_value"].notna() & (df["potential_annual"] < merged["max_annual_value"]),
         "potential_quality",
     ] = "low"
     
@@ -175,7 +200,7 @@ def main() -> None:
     ventas.to_sql("transactions", engine, if_exists="append", index=False)
     raw["campanas"].to_sql("campaigns", engine, if_exists="append", index=False)
     
-    print(f"ETL completada con éxito. Tablas guardadas en: {db_url}")
+    print("ETL completada con éxito. Tablas guardadas en la base configurada.")
     
     # Imprimir esquema para notificar a P2
     schema_info = {

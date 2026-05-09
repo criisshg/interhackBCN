@@ -9,7 +9,6 @@ Asigna a cada (cliente × subfamilia) una tipología:
 from __future__ import annotations
 
 import pandas as pd
-import numpy as np
 
 LOYAL_SOW_MIN = 0.7
 PROMISCUOUS_SOW_MIN = 0.2
@@ -25,10 +24,14 @@ def classify_client_subfam(transactions: pd.DataFrame, potential: pd.DataFrame, 
     ventas_totales = ventas.groupby(['client_id', 'subfamily', 'category'])['value'].sum().reset_index()
     
     # Unir con el potencial. El potencial viene por 'category', así que unimos por category
-    merged = ventas_totales.merge(potential[['client_id', 'category', 'potential_value']], on=['client_id', 'category'], how='left')
+    merged = ventas_totales.merge(
+        potential[['client_id', 'category', 'potential_annual']],
+        on=['client_id', 'category'],
+        how='left',
+    )
     
     # Calcular SoW (Share of Wallet). Si el potencial es menor que las ventas reales o nulo, asumimos SoW = 1.0 (Loyal)
-    merged['sow'] = merged['value'] / merged['potential_value']
+    merged['sow'] = merged['value'] / merged['potential_annual']
     merged['sow'] = merged['sow'].fillna(1.0)
     merged.loc[merged['sow'] > 1.0, 'sow'] = 1.0
     

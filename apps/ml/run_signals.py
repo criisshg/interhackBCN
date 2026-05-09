@@ -8,11 +8,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import pandas as pd
-from sqlalchemy import create_engine
-import uuid
+from sqlalchemy import create_engine, text
 import datetime
 
-from classify import classify_client_subfam, segment_clients
+from classify import classify_client_subfam
 from signals_commodity import detect_commodity_signals
 from signals_technical import detect_technical_signals
 
@@ -29,16 +28,16 @@ def main() -> dict[str, int]:
     engine = create_engine(db_url)
 
     print("1. Cargando datos de DB...")
-    transactions = pd.read_sql("SELECT * FROM transactions", engine)
+    with engine.connect() as conn:
+        transactions = pd.read_sql_query(text("SELECT * FROM transactions"), conn)
+        potential = pd.read_sql_query(text("SELECT * FROM client_potential"), conn)
+        products = pd.read_sql_query(text("SELECT * FROM products"), conn)
     
     # SQLite boolean compatibility fix
     for col in ['is_return', 'is_zero', 'is_outlier']:
         if col in transactions.columns:
             transactions[col] = transactions[col].astype(bool)
             
-    potential = pd.read_sql("SELECT * FROM client_potential", engine)
-    products = pd.read_sql("SELECT * FROM products", engine)
-
     print("2. Clasificando clientes...")
     tipologia = classify_client_subfam(transactions, potential, products)
     
@@ -66,8 +65,6 @@ def main() -> dict[str, int]:
     alerts = pd.concat(alerts_list, ignore_index=True)
     
     # Añadir columnas metadata
-    alerts['alert_id'] = [str(uuid.uuid4()) for _ in range(len(alerts))]
-    alerts['estado'] = 'pending'
     alerts['date_created'] = datetime.datetime.now()
     
     # Prioridad: Si no viene calculada del motor (ej: technical), asignar defaults
@@ -76,19 +73,60 @@ def main() -> dict[str, int]:
         
     alerts.loc[(alerts['tipo'] == 'DETERIORO_SOSTENIDO') & (alerts['prioridad_score'].isna() | (alerts['prioridad_score'] == 0)), 'prioridad_score'] = 99.0
     
-    print(f"6. Guardando {len(alerts)} alertas en base de datos...")
-    from sqlalchemy import text
+    alerts_for_api = _to_api_alert_schema(alerts)
+
+    print(f"6. Guardando {len(alerts_for_api)} alertas en base de datos...")
     try:
         with engine.begin() as conn:
             conn.execute(text("TRUNCATE TABLE client_status CASCADE"))
             conn.execute(text("TRUNCATE TABLE alerts CASCADE"))
-    except Exception as e:
+    except Exception:
         pass
         
     tipologia.to_sql("client_status", engine, if_exists="append", index=False)
-    alerts.to_sql("alerts", engine, if_exists="append", index=False)
+    alerts_for_api.to_sql("alerts", engine, if_exists="append", index=False)
 
-    return {"alerts_generated": len(alerts)}
+    return {"alerts_generated": len(alerts_for_api)}
+
+
+def _to_api_alert_schema(alerts: pd.DataFrame) -> pd.DataFrame:
+    """Adapta las señales analíticas al contrato de la API."""
+    out = pd.DataFrame()
+    out['id'] = range(1, len(alerts) + 1)
+    out['fecha'] = alerts['date_created']
+    out['client_id'] = alerts['client_id'].astype(int)
+    out['subfamilia'] = alerts['subfamily']
+    out['tipo_dinamica'] = alerts['tipo'].map({
+        'CAPTURA': 'commodity',
+        'REPOSICION': 'commodity',
+        'DETERIORO_SOSTENIDO': 'technical',
+    }).fillna('commodity')
+    out['tipologia_cliente'] = alerts['tipologia_cliente']
+    out['motivo'] = alerts['motivo']
+    out['urgencia_dias'] = alerts['tipo'].map({
+        'DETERIORO_SOSTENIDO': 2,
+        'REPOSICION': 5,
+        'CAPTURA': 7,
+    }).fillna(10).astype(int)
+    out['prioridad_score'] = alerts['prioridad_score'].fillna(1.0).astype(float)
+    out['impacto_estimado'] = (out['prioridad_score'] * 100).round(2)
+    out['canal_recomendado'] = out.apply(
+        lambda row: 'rep'
+        if row['impacto_estimado'] > 5000 and row['tipologia_cliente'] != 'marginal'
+        else 'marketing'
+        if row['tipologia_cliente'] == 'marginal'
+        else 'telesales',
+        axis=1,
+    )
+    out['gestor_responsable'] = out['canal_recomendado'].map({
+        'rep': 'delegado',
+        'telesales': 'inside sales',
+        'marketing': 'marketing automation',
+    })
+    out['plazo_dias'] = out['urgencia_dias']
+    out['estado'] = 'nueva'
+    out['features_json'] = alerts['features_json']
+    return out
 
 
 if __name__ == "__main__":
