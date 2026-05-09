@@ -6,7 +6,7 @@ httpx — desacoplado de la BD y consistente con la "capa de activación"
 del briefing v3.
 
 Variables de entorno:
-    API_BASE_URL  · default http://localhost:8000
+    API_BASE_URL  · opcional. Si no está, se usa RENDER_EXTERNAL_URL o localhost:$PORT.
 """
 from __future__ import annotations
 
@@ -15,8 +15,20 @@ from typing import Any
 
 import httpx
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000").rstrip("/")
 TIMEOUT = 10.0
+
+
+def _api_base_url() -> str:
+    configured = os.environ.get("API_BASE_URL")
+    if configured:
+        return configured.rstrip("/")
+
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if render_url:
+        return render_url.rstrip("/")
+
+    port = os.environ.get("PORT", "8000")
+    return f"http://127.0.0.1:{port}"
 
 
 # === Declaraciones (JSON Schema) que ve Gemini ===
@@ -111,7 +123,8 @@ def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     Esto permite que Gemini reciba el error como respuesta de la tool y lo comunique
     al usuario de forma natural, sin romper el loop de tool-use.
     """
-    url = f"{API_BASE_URL}{path}"
+    api_base_url = _api_base_url()
+    url = f"{api_base_url}{path}"
     try:
         r = httpx.get(url, params=params, timeout=TIMEOUT)
         r.raise_for_status()
@@ -123,7 +136,7 @@ def _get(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
             "detail": e.response.text[:500],
         }
     except httpx.RequestError as e:
-        return {"error": f"cannot reach API at {API_BASE_URL}", "exception": str(e)}
+        return {"error": f"cannot reach API at {api_base_url}", "exception": str(e)}
 
 
 # === Implementaciones ===

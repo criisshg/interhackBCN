@@ -34,7 +34,7 @@ class VoiceIn(BaseModel):
 @router.post("")
 def voice(payload: VoiceIn) -> StreamingResponse:
     voice_id = payload.voice_id or os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
-    audio_stream = _get_client().text_to_speech.convert_as_stream(
+    audio_stream = _get_client().text_to_speech.stream(
         voice_id=voice_id,
         text=payload.text,
         model_id="eleven_multilingual_v2",
