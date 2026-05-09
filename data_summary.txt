@@ -1,0 +1,10 @@
+Volumen: Filas=162546, Clientes=8095, Productos=25
+Fechas: 2021-01-04 a 2025-12-29. Huecos: 0
+Devoluciones: 2.29%, Ceros: 0.90%
+Potenciales: NA=0.00%, Absurdos (<0)=0.00%, Low=21.11%
+            Frecuencia_Ventas  Clientes_Unicos  Valor_Medio
+Familia_H                                                  
+Familia C1              76828             5913   438.218977
+Familia T1              44158             4033  1090.224457
+Familia C2              22528             2557   458.372690
+Familia T2              19032             2544   908.812023
