@@ -6,43 +6,45 @@ generadas por el motor analítico.
 from datetime import date, datetime
 from typing import Any
 
+from sqlalchemy import Index
 from sqlmodel import Field, JSON, Column, SQLModel
 
 
 class Client(SQLModel, table=True):
     __tablename__ = "clients"
-    id: int | None = Field(default=None, primary_key=True)
-    codigo_postal: str | None = None
-    provincia: str | None = None
+    client_id: int | None = Field(default=None, primary_key=True)
+    region_code: str | None = None
+    province: str | None = None
     clinic_segment: str | None = None  # P1: rule-based or KMeans (E0bis)
-    delegado_inferido: str | None = None
+    inferred_sales_rep: str | None = None
 
 
 class Product(SQLModel, table=True):
     __tablename__ = "products"
-    sku: str = Field(primary_key=True)
-    subfamilia: str
-    familia: str
-    es_commodity: bool = False
+    product_id: str = Field(primary_key=True)
+    analytical_block: str
+    category: str
+    subfamily: str
 
 
 class ClientPotential(SQLModel, table=True):
     __tablename__ = "client_potential"
-    id: int | None = Field(default=None, primary_key=True)
-    client_id: int = Field(foreign_key="clients.id")
-    subfamilia: str
-    potencial_anual: float | None = None
+    client_id: int = Field(foreign_key="clients.client_id", primary_key=True)
+    family: str = Field(primary_key=True)
+    category: str = Field(primary_key=True)
+    potential_annual: float | None = None
     potential_quality: str = "ok"  # ok | low (NA o absurdo)
 
 
 class Transaction(SQLModel, table=True):
     __tablename__ = "transactions"
-    id: int | None = Field(default=None, primary_key=True)
-    client_id: int = Field(foreign_key="clients.id")
-    sku: str = Field(foreign_key="products.sku")
-    fecha: date
-    unidades: int
-    valor: float  # ficticio, puede ser <0 (devolución) o 0 (cambio)
+    __table_args__ = (Index("ix_transactions_client_date", "client_id", "date"),)
+    transaction_id: int | None = Field(default=None, primary_key=True)
+    date: date
+    client_id: int = Field(foreign_key="clients.client_id")
+    product_id: str = Field(foreign_key="products.product_id")
+    units: int
+    value: float  # ficticio, puede ser <0 (devolución) o 0 (cambio)
     is_return: bool = False
     is_zero: bool = False
     is_outlier: bool = False  # > 3 std individual
@@ -50,17 +52,17 @@ class Transaction(SQLModel, table=True):
 
 class Campaign(SQLModel, table=True):
     __tablename__ = "campaigns"
-    id: int | None = Field(default=None, primary_key=True)
-    fecha_inicio: date
-    fecha_fin: date
-    productos_afectados: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    campaign_id: str = Field(primary_key=True)
+    start_date: date
+    end_date: date
 
 
 class Alert(SQLModel, table=True):
     __tablename__ = "alerts"
+    __table_args__ = (Index("ix_alerts_estado_tipologia", "estado", "tipologia_cliente"),)
     id: int | None = Field(default=None, primary_key=True)
     fecha: datetime
-    client_id: int = Field(foreign_key="clients.id")
+    client_id: int = Field(foreign_key="clients.client_id")
     subfamilia: str
     tipo_dinamica: str  # commodity | technical
     tipologia_cliente: str  # loyal | promiscuous | at_risk | marginal

@@ -23,6 +23,10 @@ dev = [
     "pytest-asyncio>=0.23",
 ]
 
+[tool.setuptools]
+packages = ["agent", "routers"]
+py-modules = ["database", "errors", "main", "models"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

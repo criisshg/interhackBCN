@@ -1,4 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
+from sqlmodel import Session, col, select
+
+from database import get_session
+from models import Alert, Client
 
 router = APIRouter()
 
@@ -8,15 +13,95 @@ def list_alerts(
     tipo: str | None = None,
     tipologia: str | None = None,
     provincia: str | None = None,
+    province: str | None = None,
     subfamilia: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    session: Session = Depends(get_session),
 ) -> dict:
-    # P2: implement real query
-    return {"items": [], "total": 0, "limit": limit, "offset": offset}
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    filters = []
+    if tipo:
+        filters.append(Alert.tipo_dinamica == tipo)
+    if tipologia:
+        filters.append(Alert.tipologia_cliente == tipologia)
+    if subfamilia:
+        filters.append(Alert.subfamilia == subfamilia)
+    province_filter = province or provincia
+    if province_filter:
+        filters.append(Client.province == province_filter)
+
+    join_condition = col(Alert.client_id) == col(Client.client_id)
+    statement = select(Alert, Client).join(Client, join_condition)
+    count_statement = select(func.count()).select_from(Alert).join(Client, join_condition)
+    for condition in filters:
+        statement = statement.where(condition)
+        count_statement = count_statement.where(condition)
+
+    statement = statement.order_by(col(Alert.prioridad_score).desc()).offset(offset).limit(limit)
+
+    total = session.exec(count_statement).one()
+    rows = session.exec(statement).all()
+    return {
+        "items": [_alert_item(alert, client) for alert, client in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{alert_id}")
-def get_alert(alert_id: int) -> dict:
-    # P2: implement detail with features_json + motivo + cliente snapshot
-    return {"id": alert_id, "motivo": "", "features_json": {}}
+def get_alert(alert_id: int, session: Session = Depends(get_session)) -> dict:
+    row = session.exec(
+        select(Alert, Client)
+        .join(Client, col(Alert.client_id) == col(Client.client_id))
+        .where(Alert.id == alert_id)
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"alert {alert_id} not found")
+
+    alert, client = row
+    return {
+        **_alert_item(alert, client),
+        "features_json": alert.features_json,
+        "cliente": _client_snapshot(client),
+    }
+
+
+def _alert_item(alert: Alert, client: Client) -> dict:
+    return {
+        "id": alert.id,
+        "fecha": alert.fecha.isoformat(),
+        "client_id": alert.client_id,
+        "province": client.province,
+        "provincia": client.province,
+        "region_code": client.region_code,
+        "codigo_postal": client.region_code,
+        "subfamilia": alert.subfamilia,
+        "tipo_dinamica": alert.tipo_dinamica,
+        "tipologia_cliente": alert.tipologia_cliente,
+        "motivo": alert.motivo,
+        "urgencia_dias": alert.urgencia_dias,
+        "prioridad_score": alert.prioridad_score,
+        "impacto_estimado": alert.impacto_estimado,
+        "canal_recomendado": alert.canal_recomendado,
+        "gestor_responsable": alert.gestor_responsable,
+        "plazo_dias": alert.plazo_dias,
+        "estado": alert.estado,
+    }
+
+
+def _client_snapshot(client: Client) -> dict:
+    return {
+        "id": client.client_id,
+        "client_id": client.client_id,
+        "region_code": client.region_code,
+        "codigo_postal": client.region_code,
+        "province": client.province,
+        "provincia": client.province,
+        "clinic_segment": client.clinic_segment,
+        "inferred_sales_rep": client.inferred_sales_rep,
+        "delegado_inferido": client.inferred_sales_rep,
+    }
