@@ -47,10 +47,10 @@
 ### Nig · P4
 
 - [ ] Python 3.11+
-- [ ] **Acceso al API key de Anthropic** (sponsor lo entrega en kickoff — confirmar antes)
-- [ ] Repasar Anthropic tool-use docs: <https://docs.anthropic.com/en/docs/build-with-claude/tool-use>
-- [ ] Tener `anthropic` SDK instalado en local: `pip install anthropic`
-- [ ] Probar un Hello World con Claude desde Python en local
+- [ ] **Tu propia API key de Google Gemini** generada en <https://aistudio.google.com/apikey> (free tier suficiente para el hackathon)
+- [ ] Repasar Gemini function calling docs: <https://ai.google.dev/gemini-api/docs/function-calling>
+- [ ] Tener `google-genai` SDK instalado en local: `pip install google-genai`
+- [ ] Probar un Hello World con Gemini desde Python en local
 
 ### Ger · P5
 
@@ -190,10 +190,10 @@
 ### NIG · P4 · AI / Agent
 
 #### F0 (h0–h3) · scaffolding agent
-- [ ] Confirmar acceso al API key de Anthropic (con Ger / sponsor)
-- [ ] Probar 1 llamada con `anthropic` SDK en notebook local
+- [ ] Generar API key personal en <https://aistudio.google.com/apikey>, ponerla en tu `.env` local (NUNCA en código)
+- [ ] Probar 1 llamada con `google-genai` SDK en notebook local
 - [ ] Definir contrato final de las 4 tools (`tools.py` ya tiene draft, revisar)
-- [ ] Decidir modelo: por defecto `claude-opus-4-7` (cambiar a haiku si hay límite de cuota)
+- [ ] Decidir modelo: por defecto `gemini-2.5-flash` (subir a `gemini-2.5-pro` si necesitamos razonamiento más fino)
 
 #### F1 (h3–h12) · chat endpoint v1
 - [ ] Implementar `apps/api/routers/chat.py` con loop de tool-use

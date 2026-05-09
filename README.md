@@ -55,7 +55,7 @@ Edita `.env` con (mínimo viable):
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/pulse
-ANTHROPIC_API_KEY=sk-ant-...   # lo entrega el sponsor en kickoff
+GEMINI_API_KEY=...   # generar en https://aistudio.google.com/apikey
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 

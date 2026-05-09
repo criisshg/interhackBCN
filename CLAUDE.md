@@ -50,7 +50,7 @@ de modelos complicados. Heurísticas bien calibradas > black-box mal explicado.
 Stack:
 
 - `apps/ml`: Python · pandas · scikit-learn · DuckDB (EDA)
-- `apps/api`: FastAPI sobre Postgres + chat (Claude tool-use)
+- `apps/api`: FastAPI sobre Postgres + chat (Gemini function calling)
 - `apps/web`: Next.js 14 + shadcn/ui + Recharts (Vercel)
 - `infra/`: Railway (API + Postgres), Vercel (front), n8n cloud (extra opcional)
 
