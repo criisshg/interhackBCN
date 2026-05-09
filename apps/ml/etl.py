@@ -53,10 +53,10 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
         'Id.Cliente': 'client_id',
         'Familia': 'family',
         'Categoria Productos': 'category',
-        'Potencial_H': 'potential_value'
+        'Potencial_H': 'potential_annual'
     })
     # Limpiar moneda y NaN
-    potencial['potential_value'] = potencial['potential_value'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+    potencial['potential_annual'] = potencial['potential_annual'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     
     # 5. Campañas
     campanas = pd.read_csv(DATA_DIR / "campañas.csv", encoding='latin1')
@@ -105,8 +105,8 @@ def clean_potencial(df: pd.DataFrame, ventas: pd.DataFrame, productos: pd.DataFr
     """Marca calidad del potencial comparándolo con ventas reales."""
     df = df.copy()
     df["potential_quality"] = "ok"
-    df.loc[df["potential_value"].isna(), "potential_quality"] = "low"
-    df.loc[df["potential_value"] <= 0, "potential_quality"] = "low"
+    df.loc[df["potential_annual"].isna(), "potential_quality"] = "low"
+    df.loc[df["potential_annual"] <= 0, "potential_quality"] = "low"
     
     # Cruzar ventas con productos para sacar la categoría de cada venta
     ventas_prod = ventas[~ventas["is_return"]].copy()
@@ -127,7 +127,7 @@ def clean_potencial(df: pd.DataFrame, ventas: pd.DataFrame, productos: pd.DataFr
     
     # Si sus ventas reales en UN SOLO AÑO ya superan el potencial actual estimado, el potencial está mal calculado (se queda corto)
     df.loc[
-        merged["max_annual_value"].notna() & (df["potential_value"] < merged["max_annual_value"]),
+        merged["max_annual_value"].notna() & (df["potential_annual"] < merged["max_annual_value"]),
         "potential_quality",
     ] = "low"
     
@@ -169,9 +169,18 @@ def main() -> None:
     except Exception as e:
         print(f"Nota: No se pudieron truncar las tablas (probablemente SQLite vacío). Error: {e}")
 
-    raw["clientes"].to_sql("clients", engine, if_exists="append", index=False)
-    raw["productos"].to_sql("products", engine, if_exists="append", index=False)
-    potencial.to_sql("client_potential", engine, if_exists="append", index=False)
+    # Limpieza de Foreign Keys para Postgres: asegurar que todos los IDs existan
+    valid_clients = set(raw["clientes"]["client_id"])
+    potencial = potencial[potencial["client_id"].isin(valid_clients)]
+    ventas = ventas[ventas["client_id"].isin(valid_clients)]
+    
+    # También limpiar product_id en ventas
+    valid_products = set(raw["productos"]["product_id"])
+    ventas = ventas[ventas["product_id"].isin(valid_products)]
+
+    raw["clientes"].drop_duplicates(subset=['client_id']).to_sql("clients", engine, if_exists="append", index=False)
+    raw["productos"].drop_duplicates(subset=['product_id']).to_sql("products", engine, if_exists="append", index=False)
+    potencial.drop_duplicates(subset=['client_id', 'family', 'category']).to_sql("client_potential", engine, if_exists="append", index=False)
     ventas.to_sql("transactions", engine, if_exists="append", index=False)
     raw["campanas"].to_sql("campaigns", engine, if_exists="append", index=False)
     
