@@ -1,11 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\04vid\\\\OneDrive\\\\Escritorio\\\\Pau\\\\UAB\\\\Internhack\\\\interhackBCN\\\\apps\\\\api\\\\routers\")",
-      "Bash(Select-Object Name)",
-      "Bash(Get-ChildItem -Recurse \"c:\\\\Users\\\\04vid\\\\OneDrive\\\\Escritorio\\\\Pau\\\\UAB\\\\Internhack\\\\interhackBCN\\\\infra\")",
-      "Bash(Select-Object FullName)",
-      "PowerShell(vercel --version)"
+      "Bash(git *)",
+      "WebFetch(domain:www.mlh.com)",
+      "WebSearch",
+      "Bash(curl -v --max-time 5 https://github.com)",
+      "Bash(python3 *)",
+      "Bash(pip3 install *)"
     ]
   }
 }
