@@ -6,6 +6,7 @@ generadas por el motor analítico.
 from datetime import date, datetime
 from typing import Any
 
+from sqlalchemy import Index
 from sqlmodel import Field, JSON, Column, SQLModel
 
 
@@ -37,6 +38,7 @@ class ClientPotential(SQLModel, table=True):
 
 class Transaction(SQLModel, table=True):
     __tablename__ = "transactions"
+    __table_args__ = (Index("ix_transactions_client_fecha", "client_id", "fecha"),)
     id: int | None = Field(default=None, primary_key=True)
     client_id: int = Field(foreign_key="clients.id")
     sku: str = Field(foreign_key="products.sku")
@@ -58,6 +60,7 @@ class Campaign(SQLModel, table=True):
 
 class Alert(SQLModel, table=True):
     __tablename__ = "alerts"
+    __table_args__ = (Index("ix_alerts_estado_tipologia", "estado", "tipologia_cliente"),)
     id: int | None = Field(default=None, primary_key=True)
     fecha: datetime
     client_id: int = Field(foreign_key="clients.id")
