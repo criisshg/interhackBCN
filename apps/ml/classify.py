@@ -63,16 +63,45 @@ def classify_client_subfam(transactions: pd.DataFrame, potential: pd.DataFrame, 
     return merged[['client_id', 'subfamily', 'category', 'tipologia', 'sow']]
 
 
-def segment_clients(transactions: pd.DataFrame) -> pd.DataFrame:
-    """Devuelve DataFrame con: client_id, clinic_segment."""
-    ventas = transactions[(~transactions["is_return"]) & (~transactions["is_zero"])]
-    ventas_por_cliente = ventas.groupby('client_id')['value'].sum().reset_index()
-    
-    p90 = ventas_por_cliente['value'].quantile(0.90)
-    p50 = ventas_por_cliente['value'].quantile(0.50)
-    
-    ventas_por_cliente['clinic_segment'] = 'Tier 3 (Bottom 50%)'
-    ventas_por_cliente.loc[ventas_por_cliente['value'] > p50, 'clinic_segment'] = 'Tier 2 (Mid 40%)'
-    ventas_por_cliente.loc[ventas_por_cliente['value'] > p90, 'clinic_segment'] = 'Tier 1 (Top 10%)'
-    
-    return ventas_por_cliente[['client_id', 'clinic_segment']]
+def segment_clients(transactions: pd.DataFrame, use_kmeans: bool = True) -> pd.DataFrame:
+    """Devuelve DataFrame con: client_id, clinic_segment.
+
+    E0bis: KMeans sobre 3 features RFM (Recency-Frequency-Monetary).
+    Fallback a reglas por percentil si use_kmeans=False.
+    """
+    ventas = transactions[(~transactions["is_return"]) & (~transactions["is_zero"])].copy()
+    ventas["date"] = pd.to_datetime(ventas["date"])
+    today = ventas["date"].max()
+
+    rfm = ventas.groupby("client_id").agg(
+        total_value=("value", "sum"),
+        n_purchases=("transaction_id", "count"),
+        last_purchase=("date", "max"),
+    ).reset_index()
+    rfm["recency_days"] = (today - rfm["last_purchase"]).dt.days
+
+    if use_kmeans:
+        from sklearn.cluster import KMeans
+        from sklearn.preprocessing import StandardScaler
+
+        X = StandardScaler().fit_transform(rfm[["total_value", "n_purchases", "recency_days"]])
+        km = KMeans(n_clusters=4, random_state=42, n_init=10)
+        rfm["cluster"] = km.fit_predict(X)
+
+        # Rankear clusters por valor promedio (mayor valor → mejor segmento)
+        rank = (
+            rfm.groupby("cluster")["total_value"]
+            .mean()
+            .rank(ascending=False)
+            .astype(int)
+        )
+        labels = {c: ["VIP", "Standard", "Occasional", "Inactive"][r - 1] for c, r in rank.items()}
+        rfm["clinic_segment"] = rfm["cluster"].map(labels)
+    else:
+        p90 = rfm["total_value"].quantile(0.90)
+        p50 = rfm["total_value"].quantile(0.50)
+        rfm["clinic_segment"] = "Tier 3 (Bottom 50%)"
+        rfm.loc[rfm["total_value"] > p50, "clinic_segment"] = "Tier 2 (Mid 40%)"
+        rfm.loc[rfm["total_value"] > p90, "clinic_segment"] = "Tier 1 (Top 10%)"
+
+    return rfm[["client_id", "clinic_segment"]]

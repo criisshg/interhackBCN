@@ -20,20 +20,29 @@ Heurísticas calibradas e interpretables > black-box mal explicado. Cada decisi�
 
 ## Motor commodity
 
-P1 completa con valores reales tras EDA:
-
-- Periodo de cálculo: últimos `__` meses
-- `k` para alerta de captura: `__` (calibrado por percentil global, p.ej. p85)
-- Umbral de "cadencia regular": std relativa < `__`
-- Reposición se dispara cuando `dias_para_proxima` ≤ `__`
+- Periodo de cálculo: histórico completo (5 años)
+- `k_std` para alerta de captura: `1.0` (z_score > 1.0 → overdue anómalo)
+- `z_percentile_min` = `60` — solo el top-40% más tardíos de los clientes en retraso (F3: anti-inundación)
+- Priorización dinámica: percentil global del z_score entre todos los clientes tardíos
+- Reposición se dispara cuando `days_since_last >= mean_days - 7`
+- Mínimo de compras para calcular cadencia: `2`
 
 ## Motor technical
 
-- Baseline rolling de `__` meses
-- `min_periods` = `__` (clientes con menos histórico se excluyen)
-- `consecutive_below` = `__` períodos consecutivos bajo banda inferior
-- `k_std` para banda inferior = `__`
-- **Tratamiento de esporádicos válidos** (E5 si tiempo): si la varianza histórica es alta, requerir más períodos consecutivos.
+- Baseline rolling de `6` meses (min_periods=3 para los primeros meses)
+- `min_periods` = `6` (clientes con menos períodos mensuales se excluyen)
+- `consecutive_below` = `3` períodos consecutivos bajo banda inferior
+- `k_std` para banda inferior = `1.0` (media - 1·std)
+- `drop_pct_min` = `0.20` — la caída real debe ser ≥ 20% del baseline (F3: elimina deterioros marginales)
+- Umbral de baseline significativo: `> 100 €` (evita ruido en clientes residuales)
+- Solo genera alerta si tipología ∈ {loyal, promiscuous, at_risk}
+
+## Segmentación de clínicas (E0bis)
+
+- Algoritmo: KMeans con K=4 sobre 3 features RFM estandarizadas (total_value, n_purchases, recency_days)
+- Segmentos: `VIP`, `Standard`, `Occasional`, `Inactive` (rank por valor promedio de cluster)
+- Fallback por reglas disponible con `use_kmeans=False`
+- Ejecutado en cada `run_signals.py` y persistido en `clients.clinic_segment`
 
 ## Anomalías y tratamiento
 

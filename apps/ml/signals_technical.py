@@ -19,6 +19,7 @@ def detect_technical_signals(
     min_periods: int = 6,
     consecutive_below: int = 3,
     k_std: float = 1.0,
+    drop_pct_min: float = 0.0,
 ) -> pd.DataFrame:
     """Devuelve DataFrame con columnas alineadas al schema de `alerts`."""
     ventas = transactions[(~transactions["is_return"]) & (~transactions["is_zero"])].copy()
@@ -75,44 +76,50 @@ def detect_technical_signals(
                 tip_info = tip_dict.get((cid, subf), {'tipologia': 'marginal', 'sow': 1.0})
                 tip = tip_info['tipologia']
                 sow = tip_info['sow']
-                
+
                 if tip in ['loyal', 'promiscuous', 'at_risk']:
                     mean_val = float(last_m_baseline.iloc[-1]) if not np.isnan(last_m_baseline.iloc[-1]) else 0.0
                     curr_val = float(last_m_months['value'].mean())
                     drop_amount = mean_val - curr_val
-                    
-                    if drop_amount > 0:
-                        alerts_raw.append({
-                            'client_id': cid,
-                            'subfamily': subf,
-                            'tipo': 'DETERIORO_SOSTENIDO',
-                            'tipologia_cliente': tip,
-                            'mean_val': mean_val,
-                            'curr_val': curr_val,
-                            'drop_amount': drop_amount,
-                            'sow': sow
-                        })
-                    
+                    drop_pct = float(drop_amount / mean_val) if mean_val > 0 else 0.0
+
+                    if drop_pct < drop_pct_min:
+                        continue
+
+                    alerts_raw.append({
+                        'client_id': cid,
+                        'subfamily': subf,
+                        'tipo': 'DETERIORO_SOSTENIDO',
+                        'tipologia_cliente': tip,
+                        'mean_val': mean_val,
+                        'curr_val': curr_val,
+                        'drop_amount': drop_amount,
+                        'drop_pct': drop_pct,
+                        'sow': sow,
+                    })
+
     df_alerts = pd.DataFrame(alerts_raw)
     if df_alerts.empty:
         return pd.DataFrame()
-        
-    # Calcular percentil global del impacto económico
+
+    # Prioridad: percentil global del impacto económico absoluto
     df_alerts['prioridad_score'] = df_alerts['drop_amount'].rank(pct=True) * 100
-    
-    # Formatear la salida
+
     alerts_final = []
     for _, row in df_alerts.iterrows():
-        motivo = f"Deterioro sostenido: {consecutive_below} meses cayendo. Media habitual {row['mean_val']:.0f}€, actual {row['curr_val']:.0f}€. Pierdes {row['drop_amount']:.0f}€/mes."
-        
+        motivo = (
+            f"Deterioro sostenido: {consecutive_below} meses cayendo. "
+            f"Media habitual {row['mean_val']:.0f}€, actual {row['curr_val']:.0f}€. "
+            f"Pierdes {row['drop_amount']:.0f}€/mes ({row['drop_pct']*100:.0f}% de caída)."
+        )
         features = {
             "baseline_6m": float(row['mean_val']),
             "recent_3m_avg": float(row['curr_val']),
             "drop_amount": float(row['drop_amount']),
+            "drop_pct": float(row['drop_pct']),
             "drop_percentile_global": float(row['prioridad_score']),
-            "sow_subfamily": float(row['sow'])
+            "sow_subfamily": float(row['sow']),
         }
-        
         alerts_final.append({
             'client_id': row['client_id'],
             'subfamily': row['subfamily'],
@@ -120,7 +127,7 @@ def detect_technical_signals(
             'tipologia_cliente': row['tipologia_cliente'],
             'motivo': motivo,
             'prioridad_score': float(row['prioridad_score']),
-            'features_json': json.dumps(features)
+            'features_json': json.dumps(features),
         })
-        
+
     return pd.DataFrame(alerts_final)
