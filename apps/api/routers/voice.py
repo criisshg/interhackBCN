@@ -1,18 +1,28 @@
+import os
+from typing import Any
+
 from fastapi import APIRouter
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from elevenlabs.client import ElevenLabs
-import os
 
 router = APIRouter()
 
-_client: ElevenLabs | None = None
+_client: Any | None = None
 
 
-def _get_client() -> ElevenLabs:
+def _get_client() -> Any:
     global _client
     if _client is None:
-        _client = ElevenLabs(api_key=os.environ["ELEVENLABS_API_KEY"])
+        api_key = os.environ.get("ELEVENLABS_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=503, detail="ELEVENLABS_API_KEY is not configured")
+        try:
+            from elevenlabs.client import ElevenLabs
+        except ImportError as exc:
+            raise HTTPException(status_code=503, detail="ElevenLabs dependency is not installed") from exc
+
+        _client = ElevenLabs(api_key=api_key)
     return _client
 
 
