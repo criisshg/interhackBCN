@@ -158,12 +158,22 @@ def main() -> None:
     potencial = clean_potencial(raw["potencial"], ventas, raw["productos"])
     
     print("4. Escribiendo en base de datos (Idempotente)...")
-    # if_exists="replace" garantiza la idempotencia (se puede correr 100 veces y no duplica)
-    raw["clientes"].to_sql("clients", engine, if_exists="replace", index=False)
-    raw["productos"].to_sql("products", engine, if_exists="replace", index=False)
-    potencial.to_sql("client_potential", engine, if_exists="replace", index=False)
-    ventas.to_sql("transactions", engine, if_exists="replace", index=False)
-    raw["campanas"].to_sql("campaigns", engine, if_exists="replace", index=False)
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE clients CASCADE"))
+            conn.execute(text("TRUNCATE TABLE products CASCADE"))
+            conn.execute(text("TRUNCATE TABLE client_potential CASCADE"))
+            conn.execute(text("TRUNCATE TABLE transactions CASCADE"))
+            conn.execute(text("TRUNCATE TABLE campaigns CASCADE"))
+    except Exception as e:
+        print(f"Nota: No se pudieron truncar las tablas (probablemente SQLite vacío). Error: {e}")
+
+    raw["clientes"].to_sql("clients", engine, if_exists="append", index=False)
+    raw["productos"].to_sql("products", engine, if_exists="append", index=False)
+    potencial.to_sql("client_potential", engine, if_exists="append", index=False)
+    ventas.to_sql("transactions", engine, if_exists="append", index=False)
+    raw["campanas"].to_sql("campaigns", engine, if_exists="append", index=False)
     
     print(f"ETL completada con éxito. Tablas guardadas en: {db_url}")
     

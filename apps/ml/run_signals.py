@@ -77,7 +77,16 @@ def main() -> dict[str, int]:
     alerts.loc[(alerts['tipo'] == 'DETERIORO_SOSTENIDO') & (alerts['prioridad_score'].isna() | (alerts['prioridad_score'] == 0)), 'prioridad_score'] = 99.0
     
     print(f"6. Guardando {len(alerts)} alertas en base de datos...")
-    alerts.to_sql("alerts", engine, if_exists="replace", index=False)
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE client_status CASCADE"))
+            conn.execute(text("TRUNCATE TABLE alerts CASCADE"))
+    except Exception as e:
+        pass
+        
+    tipologia.to_sql("client_status", engine, if_exists="append", index=False)
+    alerts.to_sql("alerts", engine, if_exists="append", index=False)
 
     return {"alerts_generated": len(alerts)}
 
