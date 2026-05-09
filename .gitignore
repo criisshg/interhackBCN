@@ -62,3 +62,6 @@ pnpm-debug.log*
 # --- Demo backup (binario grande) ---
 docs/demo_backup.mp4
 docs/*.mov
+
+# --- Artefactos del REPL de chat (TTS) ---
+*.mp3
