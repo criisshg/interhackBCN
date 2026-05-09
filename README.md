@@ -13,13 +13,53 @@ clasificando clientes en leales / promiscuos / riesgo de fuga.
 - **`infra/`** — n8n workflow (extra opcional), config Railway/Vercel
 - **`data/raw/`** — CSVs de Inibsa (no versionados, ver `.gitignore`)
 
-## Quick start
+## Quick setup (1 comando)
+
+Después de clonar el repo:
 
 ```bash
-make dev      # levanta API y Web en local
+# Windows (PowerShell)
+.\scripts\setup.ps1
+
+# Mac / Linux
+bash scripts/setup.sh
+
+# o usando make en cualquiera de los dos
+make setup
+```
+
+El script:
+
+- Verifica Python 3.11+, Node 20+ y Git
+- Crea `.venv` e instala todas las dependencias Python (`requirements.txt`)
+- Instala dependencias Node de `apps/web/`
+- Copia los `.env.example` a `.env` correspondientes (los **edita tú** con tus valores)
+
+Después:
+
+```bash
+# Windows
+.\.venv\Scripts\Activate.ps1
+# Mac/Linux
+source .venv/bin/activate
+
+# Levantar en local
+make dev      # API (8000) + Web (3000) en paralelo
 make seed     # carga los CSVs en Postgres local
 make check    # lint + tipos + tests
 ```
+
+## Variables de entorno
+
+Edita `.env` con (mínimo viable):
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/pulse
+ANTHROPIC_API_KEY=sk-ant-...   # lo entrega el sponsor en kickoff
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Para producción (Railway + Vercel) los valores los configura Ger (P5) en cada plataforma.
 
 ## Equipo (DATA PENTAKILL)
 

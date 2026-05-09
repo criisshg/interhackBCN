@@ -1,9 +1,18 @@
-.PHONY: dev seed check deploy api web ml install
+.PHONY: setup dev seed check deploy api web ml install recalc
 
 # === Setup ===
+# Quick setup para todo el equipo. Detecta SO automáticamente.
+# Crea venv, instala Python deps, npm deps, y copia .env.example → .env
+setup:
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
+else
+	bash scripts/setup.sh
+endif
+
+# Alternativa manual (si setup.* falla por algún motivo):
 install:
-	cd apps/api && pip install -e .
-	cd apps/ml && pip install -e .
+	pip install -r requirements.txt
 	cd apps/web && npm install
 
 # === Dev ===
