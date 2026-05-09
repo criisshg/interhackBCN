@@ -1,0 +1,29 @@
+[project]
+name = "pulse-ml"
+version = "0.1.0"
+description = "Pulse ML · ETL + signals engine for Inibsa"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "duckdb>=0.10",
+    "psycopg2-binary>=2.9",
+    "sqlalchemy>=2.0",
+    "openpyxl>=3.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+extras = [
+    "statsmodels>=0.14",  # E0 estacionalidad
+]
+dev = [
+    "ruff>=0.3",
+    "mypy>=1.9",
+    "jupyter>=1.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

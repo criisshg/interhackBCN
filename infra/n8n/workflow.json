@@ -1,0 +1,7 @@
+{
+  "_comment": "Extra opcional E2. P5 monta esto en n8n cloud si sobra tiempo en F2.",
+  "_purpose": "Cron diario → POST /run-recalc → consultar top alertas por delegación → email/Slack",
+  "name": "Pulse · Daily recalc and dispatch",
+  "nodes": [],
+  "connections": {}
+}
