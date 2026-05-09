@@ -3,11 +3,13 @@
 Por cada (cliente × subfamilia técnica con histórico ≥ N períodos):
 - baseline rolling 6-12 meses (frecuencia y volumen)
 - alerta DETERIORO_SOSTENIDO si M períodos consecutivos < banda inferior (media - k·std)
+- Priorización basada en el percentil global del impacto económico de la caída.
 """
 from __future__ import annotations
 
 import pandas as pd
 import numpy as np
+import json
 
 def detect_technical_signals(
     transactions: pd.DataFrame,
@@ -32,14 +34,17 @@ def detect_technical_signals(
     
     # Agrupación mensual
     ventas_t['month'] = ventas_t['date'].dt.to_period('M')
-    v_monthly = ventas_t.groupby(['client_id', 'subfamily', 'month'])['value'].sum().reset_index()
     
     current_month = pd.to_datetime(today).to_period('M')
     
-    alerts = []
+    # Pre-merge de tipologia para acceso rápido
+    tip_dict = tipologia.set_index(['client_id', 'subfamily'])[['tipologia', 'sow']].to_dict('index')
     
-    # Procesar cliente a cliente agrupado
-    groups = v_monthly.groupby(['client_id', 'subfamily'])
+    alerts_raw = []
+    
+    # Agrupar la suma mensual cruda
+    v_monthly_simple = ventas_t.groupby(['client_id', 'subfamily', 'month'])['value'].sum().reset_index()
+    groups = v_monthly_simple.groupby(['client_id', 'subfamily'])
     
     for (cid, subf), group in groups:
         if len(group) < min_periods:
@@ -47,16 +52,16 @@ def detect_technical_signals(
             
         group = group.sort_values('month').set_index('month')
         
-        # Asegurar todos los meses entre su primera compra y HOY (rellenar con 0 si no compró)
+        # Asegurar todos los meses entre su primera compra y HOY
         all_months = pd.period_range(start=group.index.min(), end=current_month, freq='M')
         group = group.reindex(all_months, fill_value=0).reset_index()
         group = group.rename(columns={'index': 'month'})
         
-        # Calcular rolling baseline (últimos 6 meses, shift 1 para no incluir el actual)
+        # Calcular rolling baseline
         baseline = group['value'].rolling(window=6, min_periods=3).mean().shift(1)
         std_dev = group['value'].rolling(window=6, min_periods=3).std().shift(1).fillna(0)
         lower_band = baseline - (k_std * std_dev)
-        lower_band = lower_band.clip(lower=0) # banda inferior nunca es negativa
+        lower_band = lower_band.clip(lower=0)
         
         # Check últimos 'consecutive_below' meses
         last_m_months = group.tail(consecutive_below)
@@ -66,33 +71,56 @@ def detect_technical_signals(
         if len(last_m_months) == consecutive_below:
             is_below = (last_m_months['value'] <= last_m_lower).all()
             
-            if is_below and last_m_baseline.mean() > 100: # Solo si el baseline era significativo
-                # Obtener la tipologia
-                tip_df = tipologia[(tipologia['client_id'] == cid) & (tipologia['subfamily'] == subf)]
-                tip = tip_df['tipologia'].iloc[0] if not tip_df.empty else 'marginal'
+            if is_below and last_m_baseline.mean() > 100:
+                tip_info = tip_dict.get((cid, subf), {'tipologia': 'marginal', 'sow': 1.0})
+                tip = tip_info['tipologia']
+                sow = tip_info['sow']
                 
-                # Exigimos que fuera un cliente decente para preocuparnos del deterioro
                 if tip in ['loyal', 'promiscuous', 'at_risk']:
-                    import json
-                    
                     mean_val = float(last_m_baseline.iloc[-1]) if not np.isnan(last_m_baseline.iloc[-1]) else 0.0
                     curr_val = float(last_m_months['value'].mean())
+                    drop_amount = mean_val - curr_val
                     
-                    features = {
-                        "baseline_6m": mean_val,
-                        "recent_3m_avg": curr_val,
-                        "drop_pct": float(1 - (curr_val/mean_val)) if mean_val > 0 else 0
-                    }
+                    if drop_amount > 0:
+                        alerts_raw.append({
+                            'client_id': cid,
+                            'subfamily': subf,
+                            'tipo': 'DETERIORO_SOSTENIDO',
+                            'tipologia_cliente': tip,
+                            'mean_val': mean_val,
+                            'curr_val': curr_val,
+                            'drop_amount': drop_amount,
+                            'sow': sow
+                        })
                     
-                    motivo = f"Deterioro sostenido: Lleva {consecutive_below} meses comprando muy por debajo de su media (Media={mean_val:.0f}€, Actual={curr_val:.0f}€)."
-                    
-                    alerts.append({
-                        'client_id': cid,
-                        'subfamily': subf,
-                        'tipo': 'DETERIORO_SOSTENIDO',
-                        'tipologia_cliente': tip,
-                        'motivo': motivo,
-                        'features_json': json.dumps(features)
-                    })
-                    
-    return pd.DataFrame(alerts)
+    df_alerts = pd.DataFrame(alerts_raw)
+    if df_alerts.empty:
+        return pd.DataFrame()
+        
+    # Calcular percentil global del impacto económico
+    df_alerts['prioridad_score'] = df_alerts['drop_amount'].rank(pct=True) * 100
+    
+    # Formatear la salida
+    alerts_final = []
+    for _, row in df_alerts.iterrows():
+        motivo = f"Deterioro sostenido: {consecutive_below} meses cayendo. Media habitual {row['mean_val']:.0f}€, actual {row['curr_val']:.0f}€. Pierdes {row['drop_amount']:.0f}€/mes."
+        
+        features = {
+            "baseline_6m": float(row['mean_val']),
+            "recent_3m_avg": float(row['curr_val']),
+            "drop_amount": float(row['drop_amount']),
+            "drop_percentile_global": float(row['prioridad_score']),
+            "sow_subfamily": float(row['sow'])
+        }
+        
+        alerts_final.append({
+            'client_id': row['client_id'],
+            'subfamily': row['subfamily'],
+            'tipo': row['tipo'],
+            'tipologia_cliente': row['tipologia_cliente'],
+            'motivo': motivo,
+            'prioridad_score': float(row['prioridad_score']),
+            'features_json': json.dumps(features)
+        })
+        
+    return pd.DataFrame(alerts_final)

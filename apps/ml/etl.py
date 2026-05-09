@@ -159,12 +159,15 @@ def main() -> None:
     
     print("4. Escribiendo en base de datos (Idempotente)...")
     from sqlalchemy import text
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE clients CASCADE"))
-        conn.execute(text("TRUNCATE TABLE products CASCADE"))
-        conn.execute(text("TRUNCATE TABLE client_potential CASCADE"))
-        conn.execute(text("TRUNCATE TABLE transactions CASCADE"))
-        conn.execute(text("TRUNCATE TABLE campaigns CASCADE"))
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE clients CASCADE"))
+            conn.execute(text("TRUNCATE TABLE products CASCADE"))
+            conn.execute(text("TRUNCATE TABLE client_potential CASCADE"))
+            conn.execute(text("TRUNCATE TABLE transactions CASCADE"))
+            conn.execute(text("TRUNCATE TABLE campaigns CASCADE"))
+    except Exception as e:
+        print(f"Nota: No se pudieron truncar las tablas (probablemente SQLite vacío). Error: {e}")
 
     # Limpieza de Foreign Keys para Postgres: asegurar que todos los IDs existan
     valid_clients = set(raw["clientes"]["client_id"])
