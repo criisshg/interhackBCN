@@ -34,7 +34,7 @@ help:
 	@echo "    make check        Lint + tipos + tests unitarios"
 	@echo ""
 	@echo "  Deploy:"
-	@echo "    make deploy       Push a main (CI desplega Vercel + Railway)"
+	@echo "    make deploy       Push a main (CI desplega Vercel + Render)"
 	@echo ""
 
 # === Setup ===
@@ -118,4 +118,4 @@ check:
 # === Deploy ===
 deploy:
 	git push origin main
-	@echo "CI deploys to Vercel (web) and Railway (api+db) automatically"
+	@echo "CI deploys to Vercel (web) and Render (api+db) automatically"

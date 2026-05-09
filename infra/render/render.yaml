@@ -1,0 +1,47 @@
+# Render Blueprint · Pulse
+# https://render.com/docs/blueprint-spec
+#
+# Deploy con:
+#   1. Push a main
+#   2. En Render Dashboard: New → Blueprint → conectar este repo → seleccionar este YAML
+#   3. Rellenar GEMINI_API_KEY y ELEVENLABS_API_KEY (sync: false → Render pide valor)
+#   4. Apply → Render crea el servicio web + la Postgres y los enlaza solo
+
+databases:
+  - name: pulse-pg
+    databaseName: pulse
+    user: pulse
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: pulse-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: apps/api
+    branch: main
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pulse-pg
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        value: 21m00Tcm4TlvDq8ikWAM
+      - key: CORS_ORIGINS
+        value: https://pulse-web.vercel.app
+      - key: API_BASE_URL
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO

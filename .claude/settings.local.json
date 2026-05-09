@@ -6,7 +6,11 @@
       "WebSearch",
       "Bash(curl -v --max-time 5 https://github.com)",
       "Bash(python3 *)",
-      "Bash(pip3 install *)"
+      "Bash(pip3 install *)",
+      "Bash(mkdir -p infra/render)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\04vid\\OneDrive\\Escritorio\\Pau\\UAB\\Internhack\\interhackBCN\\infra"
     ]
   }
 }

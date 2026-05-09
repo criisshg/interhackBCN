@@ -20,6 +20,8 @@ load_dotenv(API_DIR / ".env")
 @lru_cache
 def get_engine() -> Engine:
     database_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     return create_engine(database_url, connect_args=connect_args)
 
