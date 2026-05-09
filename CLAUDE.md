@@ -170,6 +170,27 @@ Si en demo no hay datos reales de `actions`, poblar con sintéticos plausibles y
 - **P4** Agent · `apps/api/agent/` y `apps/api/routers/chat.py`
 - **P5** Infra/Demo · `infra/`, despliegue, slides, video, ensayos, n8n (extra)
 
+## MLH Sponsors
+
+### Gemini API (chatbot LLM)
+- Reemplaza Anthropic Claude. SDK: `google-generativeai`.
+- Modelo: `GEMINI_MODEL` (default: `gemini-2.0-flash`). Variable en Railway + `.env.example`.
+- Function calling con 4 tools en `apps/api/agent/tools.py` (formato `genai.protos`).
+- Loop implementado en `apps/api/routers/chat.py`: `send_message` → si hay `function_call` → ejecutar tool → enviar `FunctionResponse` → repetir hasta texto.
+- Clave: `GEMINI_API_KEY` (Railway secret + `.env.example`).
+
+### ElevenLabs (voz del chatbot)
+- TTS del response del agente. SDK: `elevenlabs`.
+- Endpoint: `POST /voice` → body `{text, voice_id?}` → devuelve `audio/mpeg` en streaming.
+- Voz configurable via `ELEVENLABS_VOICE_ID` (default Rachel `21m00Tcm4TlvDq8ikWAM`), modelo `eleven_multilingual_v2`.
+- Claves: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (Railway secrets).
+- El front llama `POST /voice` al recibir un mensaje del agente y reproduce el blob de audio.
+
+### Solana (opcional)
+- Caso de uso sugerido: registrar alertas convertidas on-chain como prueba de trazabilidad auditable.
+- Stack: `@solana/web3.js` en web + cuenta Devnet para demo.
+- No implementado en MVP. Activar solo si el equipo decide dedicar tiempo (P5 coordina).
+
 ## Qué NO hacer
 
 - No mergear nada sin que pase `make check`.

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from database import init_db
 from errors import install_error_handlers
-from routers import actions, alerts, chat, clients, metrics, recalc, stats
+from routers import actions, alerts, chat, clients, metrics, recalc, stats, voice
 
 API_DIR = Path(__file__).resolve().parent
 load_dotenv(API_DIR.parent.parent / ".env")
@@ -35,6 +35,7 @@ app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(stats.router, prefix="/stats", tags=["stats"])
 app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
 app.include_router(recalc.router, tags=["recalc"])
+app.include_router(voice.router, prefix="/voice", tags=["voice"])
 
 install_error_handlers(app)
 
