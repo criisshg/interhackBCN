@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from io import StringIO
 
 import numpy as np
 import pandas as pd
@@ -22,44 +23,54 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
     """Carga los 5 CSVs entregados por Inibsa y estandariza los nombres de columnas."""
     
     # 1. Ventas
-    ventas = pd.read_csv(DATA_DIR / "ventas.csv", encoding='latin1', on_bad_lines='skip', low_memory=False)
+    ventas = pd.read_csv(DATA_DIR / "ventas.csv", on_bad_lines='skip', low_memory=False)
     ventas = ventas.rename(columns={
-        'Num.Fact': 'transaction_id',
         'Fecha': 'date',
         'Id. Cliente': 'client_id',
         'Id. Producto': 'product_id',
         'Unidades': 'units',
         'Valores_H': 'value'
     })
+    # Num.Fact identifica factura y puede repetirse en varias líneas. La tabla necesita
+    # una PK por línea de transacción, así que generamos un id estable por fila.
+    ventas.insert(0, 'transaction_id', range(1, len(ventas) + 1))
+    ventas = ventas.drop(columns=['Num.Fact'])
+    ventas['client_id'] = ventas['client_id'].astype(int)
+    ventas['product_id'] = ventas['product_id'].astype(str)
     # Limpiar moneda
     ventas['value'] = ventas['value'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     ventas['date'] = pd.to_datetime(ventas['date'], format='%m/%d/%Y', errors='coerce').dt.date
     
     # 2. Productos
-    productos = pd.read_csv(DATA_DIR / "productos.csv", encoding='latin1')
+    productos = pd.read_csv(DATA_DIR / "productos.csv")
     productos.columns = ['product_id', 'analytical_block', 'category', 'subfamily']
+    productos['product_id'] = productos['product_id'].astype(str)
     
     # 3. Clientes
-    clientes = pd.read_csv(DATA_DIR / "clientes.csv", encoding='latin1')
+    clientes = pd.read_csv(DATA_DIR / "clientes.csv", dtype={'Unnamed: 1': 'string'})
     clientes = clientes.rename(columns={
         'Id. Cliente': 'client_id',
         'Unnamed: 1': 'region_code',
         'Provincia': 'province'
     })
+    clientes['client_id'] = clientes['client_id'].astype(int)
+    clientes['region_code'] = clientes['region_code'].astype('string').str.zfill(5)
+    clientes = clientes.drop_duplicates(subset=['client_id'], keep='first')
     
     # 4. Potencial
-    potencial = pd.read_csv(DATA_DIR / "potencial.csv", encoding='latin1')
+    potencial = pd.read_csv(DATA_DIR / "potencial.csv")
     potencial = potencial.rename(columns={
         'Id.Cliente': 'client_id',
         'Familia': 'family',
         'Categoria Productos': 'category',
         'Potencial_H': 'potential_annual'
     })
+    potencial['client_id'] = potencial['client_id'].astype(int)
     # Limpiar moneda y NaN
     potencial['potential_annual'] = potencial['potential_annual'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     
     # 5. Campañas
-    campanas = pd.read_csv(DATA_DIR / "campañas.csv", encoding='latin1')
+    campanas = pd.read_csv(DATA_DIR / "campañas.csv")
     campanas = campanas.rename(columns={
         'Campaña': 'campaign_id',
         'Fecha inicio': 'start_date',
@@ -67,6 +78,21 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
     })
     campanas['start_date'] = pd.to_datetime(campanas['start_date'], format='%m/%d/%Y', errors='coerce').dt.date
     campanas['end_date'] = pd.to_datetime(campanas['end_date'], format='%m/%d/%Y', errors='coerce').dt.date
+
+    # Algunas tablas de negocio contienen clientes que no vienen en la maestra
+    # `clientes.csv`. Para mantener claves foráneas sin perder ventas/potencial,
+    # añadimos esos IDs con localización desconocida.
+    all_client_ids = pd.Index(clientes['client_id'])
+    all_client_ids = all_client_ids.union(pd.Index(ventas['client_id']))
+    all_client_ids = all_client_ids.union(pd.Index(potencial['client_id']))
+    missing_client_ids = all_client_ids.difference(pd.Index(clientes['client_id']))
+    if len(missing_client_ids) > 0:
+        missing_clients = pd.DataFrame({
+            'client_id': missing_client_ids.astype(int),
+            'region_code': pd.NA,
+            'province': pd.NA,
+        })
+        clientes = pd.concat([clientes, missing_clients], ignore_index=True)
 
     return {
         "ventas": ventas,
@@ -161,30 +187,28 @@ def main() -> None:
     from sqlalchemy import text
     try:
         with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE clients CASCADE"))
-            conn.execute(text("TRUNCATE TABLE products CASCADE"))
-            conn.execute(text("TRUNCATE TABLE client_potential CASCADE"))
-            conn.execute(text("TRUNCATE TABLE transactions CASCADE"))
-            conn.execute(text("TRUNCATE TABLE campaigns CASCADE"))
+            conn.execute(text("SET statement_timeout = 0"))
+            conn.execute(text(
+                "TRUNCATE TABLE actions, alerts, client_status, transactions, "
+                "client_potential, campaigns, products, clients "
+                "RESTART IDENTITY CASCADE"
+            ))
     except Exception as e:
         print(f"Nota: No se pudieron truncar las tablas (probablemente SQLite vacío). Error: {e}")
 
-    # Limpieza de Foreign Keys para Postgres: asegurar que todos los IDs existan
+    # FK safety: descartar huérfanos antes de insertar
     valid_clients = set(raw["clientes"]["client_id"])
-    potencial = potencial[potencial["client_id"].isin(valid_clients)]
-    ventas = ventas[ventas["client_id"].isin(valid_clients)]
-    
-    # También limpiar product_id en ventas
     valid_products = set(raw["productos"]["product_id"])
-    ventas = ventas[ventas["product_id"].isin(valid_products)]
+    potencial = potencial[potencial["client_id"].isin(valid_clients)]
+    ventas = ventas[ventas["client_id"].isin(valid_clients) & ventas["product_id"].isin(valid_products)]
 
-    raw["clientes"].drop_duplicates(subset=['client_id']).to_sql("clients", engine, if_exists="append", index=False)
-    raw["productos"].drop_duplicates(subset=['product_id']).to_sql("products", engine, if_exists="append", index=False)
-    potencial.drop_duplicates(subset=['client_id', 'family', 'category']).to_sql("client_potential", engine, if_exists="append", index=False)
-    ventas.to_sql("transactions", engine, if_exists="append", index=False)
-    raw["campanas"].to_sql("campaigns", engine, if_exists="append", index=False)
+    write_table(raw["clientes"].drop_duplicates(subset=["client_id"]), "clients", engine)
+    write_table(raw["productos"].drop_duplicates(subset=["product_id"]), "products", engine)
+    write_table(potencial.drop_duplicates(subset=["client_id", "family", "category"]), "client_potential", engine)
+    write_table(ventas, "transactions", engine)
+    write_table(raw["campanas"], "campaigns", engine)
     
-    print(f"ETL completada con éxito. Tablas guardadas en: {db_url}")
+    print("ETL completada con éxito. Tablas guardadas en la base configurada.")
     
     # Imprimir esquema para notificar a P2
     schema_info = {
@@ -199,6 +223,29 @@ def main() -> None:
     print("="*50)
     for table, cols in schema_info.items():
         print(f"Tabla '{table}': {', '.join(cols)}")
+
+
+def write_table(df: pd.DataFrame, table_name: str, engine) -> None:
+    if engine.dialect.name != "postgresql":
+        df.to_sql(table_name, engine, if_exists="append", index=False)
+        return
+
+    buffer = StringIO()
+    df.to_csv(buffer, index=False, header=False, na_rep="", date_format="%Y-%m-%d")
+    buffer.seek(0)
+    columns = ", ".join(f'"{column}"' for column in df.columns)
+    sql = f'COPY "{table_name}" ({columns}) FROM STDIN WITH (FORMAT CSV, NULL \'\')'
+
+    raw_connection = engine.raw_connection()
+    try:
+        with raw_connection.cursor() as cursor:
+            cursor.copy_expert(sql, buffer)
+        raw_connection.commit()
+    except Exception:
+        raw_connection.rollback()
+        raise
+    finally:
+        raw_connection.close()
 
 
 if __name__ == "__main__":
