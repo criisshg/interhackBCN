@@ -2,23 +2,22 @@
 
 Guía para arrancar el proyecto en local. Si solo quieres correr cosas sin leer, salta a [TL;DR](#tldr).
 
+> 💡 **`make help`** te lista todos los comandos disponibles del proyecto.
+
 ---
 
 ## TL;DR
 
 ```bash
-# 1. Clonar
+# 1. Clonar y entrar
 git clone https://github.com/criisshg/interhackBCN.git
 cd interhackBCN
 
 # 2. Tu branch
 git checkout p1-ml | p2-api | p3-web | p4-agent | p5-infra
 
-# 3. Setup automático
-# Windows:
-.\scripts\setup.ps1
-# Mac/Linux:
-bash scripts/setup.sh
+# 3. Setup deps (1 vez)
+make setup
 
 # 4. Activar venv
 .\.venv\Scripts\Activate.ps1   # Windows
@@ -26,17 +25,14 @@ source .venv/bin/activate       # Mac/Linux
 
 # 5. Edita .env con tu GEMINI_API_KEY (ver más abajo)
 
-# 6. Levantar Postgres (Docker recomendado)
-docker run -d --name pulse-pg -p 5432:5432 \
-  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pulse \
-  postgres:16
+# 6. Bootstrap de la BD (Postgres + migraciones + carga CSVs · 1 comando)
+make bootstrap
 
-# 7. Cargar los datos
-make seed
-
-# 8. Arrancar API + Web
+# 7. Arrancar API + Web
 make dev
 ```
+
+Si todo va, abre <http://localhost:3000> (web) y <http://localhost:8000/docs> (API).
 
 ---
 
@@ -173,85 +169,68 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
-## Paso 5 · Levantar Postgres en local
+## Paso 5 · Levantar BD + migraciones + datos (1 comando)
 
-### Opción A · Docker (recomendado, 30 segundos)
-
-```bash
-docker run -d --name pulse-pg -p 5432:5432 \
-  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=pulse \
-  postgres:16
-```
-
-Para parar/arrancar después:
+### Opción rápida (recomendada): `make bootstrap`
 
 ```bash
-docker stop pulse-pg
-docker start pulse-pg
+make bootstrap
 ```
 
-### Opción B · Postgres nativo
+Hace en orden y sin que tengas que pensar:
+
+1. `make db-up` — crea contenedor Docker de Postgres 16 con BD `pulse`
+2. Espera 5 segundos a que Postgres arranque
+3. `make migrate` — aplica migraciones Alembic (crea tablas)
+4. `make seed` — carga los 5 CSVs de Inibsa + genera alertas
+5. `make db-check` — imprime cuántas filas hay en alerts/clients/transactions
+
+Tarda ~1 min la primera vez (descarga la imagen de Postgres). Si todo va bien verás algo como:
+
+```
+alerts: 1234
+clients: 6037
+transactions: 162547
+```
+
+### Opción manual (si quieres entender qué pasa)
+
+```bash
+make db-up        # Postgres en Docker
+# espera ~5s
+make migrate      # tablas Alembic
+make seed         # ETL + run_signals (carga CSVs y genera alertas)
+make db-check     # verifica que hay datos
+```
+
+### Opción nativa (sin Docker)
+
+Si prefieres Postgres nativo:
 
 - **Mac**: `brew install postgresql@16 && brew services start postgresql@16`
-- **Windows**: instalador desde [postgresql.org](https://www.postgresql.org/download/windows/) (deja la password en `postgres`)
+- **Windows**: instalador desde [postgresql.org](https://www.postgresql.org/download/windows/) (password `postgres`)
 - **Linux**: `sudo apt install postgresql-16 && sudo systemctl start postgresql`
-
-Crea la BD:
 
 ```bash
 psql -U postgres -c "CREATE DATABASE pulse;"
-```
-
-### Verificar que conecta
-
-```bash
-psql postgresql://postgres:postgres@localhost:5432/pulse -c "SELECT 1;"
-```
-
-Debería imprimir un `1` y no errores.
-
----
-
-## Paso 6 · Aplicar migraciones (P2 hizo el schema)
-
-Las migraciones de Alembic crean las tablas que necesitan el ETL y la API:
-
-```bash
-cd apps/api
-alembic upgrade head
-cd ../..
-```
-
-> 💡 Si ves errores de "table already exists", la BD ya estaba poblada. No es problema.
-
----
-
-## Paso 7 · Cargar los datos (ETL)
-
-Carga los 5 CSVs de Inibsa en Postgres y genera las alertas:
-
-```bash
+make migrate
 make seed
 ```
 
-Equivalente manual:
+### Comandos de mantenimiento de la BD
 
-```bash
-python -m apps.ml.etl
-python -m apps.ml.run_signals
-```
-
-Tarda ~30s. Al final tendrás:
-- `clients` (~6.000 filas)
-- `products` (25 filas)
-- `client_potential` (~33.000 filas)
-- `transactions` (~162.000 filas)
-- `campaigns` (10 filas)
-- `alerts` (variable según calibración)
+| Comando | Para qué |
+|---------|----------|
+| `make db-stop` | Para Postgres sin destruir datos |
+| `make db-start` | Vuelve a arrancar el contenedor |
+| `make db-logs` | Ver logs del contenedor |
+| `make db-reset` | Borra y recrea (limpia toda la BD) |
+| `make db-check` | Imprime contador de filas en tablas clave |
+| `make recalc` | Solo regenera alertas (sin recargar CSVs) |
 
 ---
 
-## Paso 8 · Arrancar API + Web en local
+## Paso 6 · Arrancar API + Web en local
 
 ### Todo a la vez
 
@@ -279,15 +258,25 @@ cd apps/web && npm run dev
 
 ---
 
-## Paso 9 · Verificar que todo funciona
+## Paso 7 · Verificar que todo funciona
 
-### Smoke test del agente Gemini
+### Smoke test del agente Gemini (sin necesidad de API arriba)
 
 ```bash
-python scripts/test_gemini.py
+make test-gemini
 ```
 
-Debe imprimir una respuesta de Gemini sobre Pulse.
+Verifica que tu `GEMINI_API_KEY` funciona. Imprime una respuesta de Gemini.
+
+### Smoke test del chat end-to-end (necesita API levantada en otra terminal)
+
+```bash
+make test-chat
+```
+
+Lanza 5 preguntas tipo contra `POST /chat` y muestra qué responde el agente. Si las 4 tools funcionan contra los endpoints de la API real, verás respuestas con datos coherentes.
+
+> Para una pregunta puntual: `python scripts/test_chat.py "tu pregunta"`
 
 ### API responde
 
@@ -315,15 +304,49 @@ Corre lint + tipos + tests. Debe pasar todo en verde antes de cualquier `git pus
 
 ## Comandos útiles del día a día
 
+> 💡 **`make help`** te lista todos los comandos disponibles con su descripción.
+
+### Setup (1 vez)
+
+| Comando | Para qué |
+|---------|----------|
+| `make setup` | Instala deps Python + Node + crea `.env` desde plantillas |
+| `make bootstrap` | DB + migraciones + carga CSVs en un solo comando |
+
+### Desarrollo
+
 | Comando | Para qué |
 |---------|----------|
 | `make dev` | Levantar API + Web a la vez |
-| `make api` | Solo la API |
-| `make web` | Solo el frontend |
-| `make seed` | Recargar todo el ETL desde los CSVs |
-| `make recalc` | Solo recalcular las señales (sin recargar CSVs) |
-| `make check` | Lint + tipos + tests |
-| `python scripts/test_gemini.py` | Smoke test del agente |
+| `make api` | Solo la API (puerto 8000) |
+| `make web` | Solo el frontend (puerto 3000) |
+
+### Base de datos (Postgres en Docker)
+
+| Comando | Para qué |
+|---------|----------|
+| `make db-up` | Crear contenedor `pulse-pg` (primera vez) |
+| `make db-start` | Arrancar contenedor existente |
+| `make db-stop` | Parar sin destruir datos |
+| `make db-reset` | Borrar y recrear (reset total) |
+| `make db-logs` | Ver logs del contenedor |
+| `make db-check` | Imprime contador de filas en tablas |
+| `make migrate` | Aplicar migraciones Alembic |
+| `make seed` | Cargar CSVs + generar alertas |
+| `make recalc` | Solo regenerar alertas (sin recargar CSVs) |
+
+### Tests
+
+| Comando | Para qué |
+|---------|----------|
+| `make test-gemini` | Smoke test del agente (verifica key) |
+| `make test-chat` | End-to-end del chat (necesita API arriba) |
+| `make check` | Lint + tipos + tests unitarios |
+
+### Git (no son make targets, pero los usas a diario)
+
+| Comando | Para qué |
+|---------|----------|
 | `git fetch origin && git rebase origin/main` | Sincronizar tu branch con main |
 | `git push origin <tu-branch>` | Subir tus commits |
 
@@ -408,7 +431,8 @@ npm install
 Tu trabajo está en `apps/ml/`. Para iterar sobre el modelo:
 
 ```bash
-python -m apps.ml.run_signals    # regenera alertas tras cambios
+make recalc           # regenera alertas tras cambios en signals_*.py
+make db-check         # ver contador de filas en alerts
 ```
 
 Notebook EDA: `apps/ml/notebooks/EDA.ipynb` (necesita `jupyter` ya instalado).
@@ -435,6 +459,11 @@ npx shadcn-ui@latest add <componente>   # button, card, table, dialog, etc.
 ### Nig (P4)
 
 Tu trabajo está en `apps/api/agent/` y `apps/api/routers/chat.py`. Después de tocar prompts o tools, no hace falta reiniciar — `uvicorn --reload` lo recarga.
+
+```bash
+make test-gemini      # smoke test (verifica key, no necesita API arriba)
+make test-chat        # end-to-end (necesita API levantada en otra terminal)
+```
 
 ### Ger (P5)
 
