@@ -43,4 +43,4 @@ check:
 # === Deploy ===
 deploy:
 	git push origin main
-	@echo "CI deploys to Vercel (web) and Railway (api+db) automatically"
+	@echo "CI deploys to Vercel (web) automatically. DB hosted on Supabase."
