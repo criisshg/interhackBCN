@@ -441,6 +441,26 @@ function AlertCenter({
     return c;
   }, [alerts]);
 
+  // KPIs calculados en tiempo real desde el array de alertas — se actualizan
+  // inmediatamente al pulsar Convertido / Llamar / X sin necesidad de refetch.
+  const liveKpi = useMemo(() => {
+    const active = alerts.filter((a) => a.estado === "nueva" || a.estado === "en_curso");
+    const closed = alerts.filter((a) => ["convertida", "desestimada", "expirada"].includes(a.estado));
+    const converted = alerts.filter((a) => a.estado === "convertida");
+
+    const pipeline_eur = active.reduce((s, a) => s + (a.impacto_estimado || 0), 0);
+    const at_risk = new Set(
+      active.filter((a) => a.tipologia_cliente === "at_risk").map((a) => a.client_id)
+    ).size;
+    const conversion_rate = closed.length > 0 ? converted.length / closed.length : metrics.conversion_rate;
+    // Cobertura: fracción de alertas activas que ya tienen acción registrada (en_curso)
+    const coverage_rate = active.length > 0
+      ? active.filter((a) => a.estado === "en_curso").length / active.length
+      : metrics.coverage_rate;
+
+    return { pipeline_eur, at_risk, conversion_rate, coverage_rate };
+  }, [alerts, metrics.conversion_rate, metrics.coverage_rate]);
+
   return (
     <div className="tab-view">
       {/* KPI cockpit */}
@@ -460,7 +480,7 @@ function AlertCenter({
             <Euro size={15} />
           </div>
           <div className="kpi-lbl">Pipeline pendiente</div>
-          <div className="kpi-num">{fmtEUR(stats.pipeline_eur)}</div>
+          <div className="kpi-num">{fmtEUR(liveKpi.pipeline_eur)}</div>
           <div className="kpi-sub">impacto estimado activo</div>
           <div className="signal-track" style={{ marginTop: 10 }}>
             <span style={{ width: "58%", background: "var(--pulse-blue)" }} />
@@ -477,7 +497,7 @@ function AlertCenter({
               RIESGO
             </span>
           </div>
-          <div className="kpi-num">{stats.by_tipologia.at_risk ?? 0}</div>
+          <div className="kpi-num">{liveKpi.at_risk}</div>
           <div className="kpi-sub">clientes con deterioro</div>
           <div className="signal-track" style={{ marginTop: 10 }}>
             <span style={{ width: "42%", background: "var(--pulse-coral)" }} />
@@ -489,10 +509,10 @@ function AlertCenter({
             <Target size={15} />
           </div>
           <div className="kpi-lbl">Win-rate</div>
-          <div className="kpi-num">{fmtPct(metrics.conversion_rate)}</div>
+          <div className="kpi-num">{fmtPct(liveKpi.conversion_rate)}</div>
           <div className="kpi-sub">convertidas / cerradas</div>
           <div className="signal-track" style={{ marginTop: 10 }}>
-            <span style={{ width: `${metrics.conversion_rate * 100}%`, background: "#16a34a" }} />
+            <span style={{ width: `${liveKpi.conversion_rate * 100}%`, background: "#16a34a" }} />
           </div>
         </div>
         <div className="card kpi">
@@ -501,10 +521,10 @@ function AlertCenter({
             <GaugeIcon size={15} />
           </div>
           <div className="kpi-lbl">Cobertura &lt;48h</div>
-          <div className="kpi-num">{fmtPct(metrics.coverage_rate)}</div>
+          <div className="kpi-num">{fmtPct(liveKpi.coverage_rate)}</div>
           <div className="kpi-sub">acciones registradas en plazo</div>
           <div className="signal-track" style={{ marginTop: 10 }}>
-            <span style={{ width: `${metrics.coverage_rate * 100}%`, background: "var(--pulse-blue-deep)" }} />
+            <span style={{ width: `${liveKpi.coverage_rate * 100}%`, background: "var(--pulse-blue-deep)" }} />
           </div>
         </div>
       </div>
