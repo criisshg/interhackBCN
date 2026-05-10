@@ -31,7 +31,7 @@ def detect_commodity_signals(
     revenue['revenue_percentile'] = revenue['value'].rank(pct=True) * 100
     
     # Filtrar solo commodities (C1, C2)
-    prod_c = products[products['analytical_block'] == 'Commodities']
+    prod_c = products[products['analytical_block'] == 'commodity']
     ventas_c = ventas[ventas['product_id'].isin(prod_c['product_id'])].copy()
     ventas_c = ventas_c.merge(prod_c[['product_id', 'subfamily']], on='product_id', how='left')
     

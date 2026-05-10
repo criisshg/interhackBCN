@@ -26,13 +26,18 @@
 ## 5. Propuesta Clave: Commodity vs Technical
 Tras analizar el cruce de ventas con productos por subfamilia, los datos muestran dos comportamientos muy marcados:
 
-| Familia | Frecuencia de Ventas | Clientes Únicos | Ticket Medio (€) | Clasificación Propuesta |
-|---------|----------------------|-----------------|------------------|-------------------------|
-| **Familia C1** | 76,828 | 5,913 | 438.22 | **Commodity** |
-| **Familia T1** | 44,158 | 4,033 | 1,090.22 | **Technical** |
-| **Familia C2** | 22,528 | 2,557 | 458.37 | **Commodity** |
-| **Familia T2** | 19,032 | 2,544 | 908.81 | **Technical** |
+| Familia (`subfamily`) | Categoría (`category`) | Frecuencia de Ventas | Clientes Únicos | Ticket Medio (€) | Bloque |
+|---|---|---|---|---|---|
+| **C1** (Anestesia) | C1 | 76,828 | 5,913 | 438.22 | **commodity** |
+| **T1** (Biomateriales · F.T1) | T1 | 44,158 | 4,033 | 1,090.22 | **technical** |
+| **C2** (Bioseguridad) | C2 | 22,528 | 2,557 | 458.37 | **commodity** |
+| **T2** (Biomateriales · F.T2) | T1 | 19,032 | 2,544 | 908.81 | **technical** |
+
+> **Nota de jerarquía:** T2 es una *familia/subfamilia* dentro de *Categoría T1* (Biomateriales).
+> No existe una Categoría T2. Ambas familias técnicas (T1 y T2) comparten el mismo potencial
+> de categoría (`category = T1`). Los nombres "Familia T1" y "Familia T2" son etiquetas
+> operativas — no aparecen como tal en los CSVs originales.
 
 ### Conclusión para el MVP
-* Las **Familias C1 y C2** son claramente **Commodities**: tienen mayor frecuencia de compra, gran penetración de clientes (>5k y >2.5k respectivamente) y un ticket medio bajo (~400€-450€). Aquí aplica buscar caídas en la regularidad (*share-of-wallet / días sin compra*).
-* Las **Familias T1 y T2** son claramente **Technical**: se compran con mucha menor frecuencia, pero suponen un ticket medio que duplica al commodity (~900€-1,100€). Aquí aplica analizar el deterioro sostenido a lo largo del tiempo.
+* Las **familias C1 y C2** son claramente **commodity**: mayor frecuencia de compra, gran penetración (~5k y ~2.5k clientes) y ticket medio bajo (~400-450€). Aplica buscar caídas en la regularidad (*share-of-wallet / días sin compra*).
+* Las **familias T1 y T2** son claramente **technical**: baja frecuencia pero ticket medio que duplica al commodity (~900-1.100€). Aplica analizar deterioro sostenido a lo largo del tiempo.

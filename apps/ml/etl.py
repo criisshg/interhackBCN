@@ -9,6 +9,7 @@ Carga los 5 CSVs de `data/raw/` en Postgres con limpieza y renombrado de columna
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from io import StringIO
 
@@ -17,6 +18,15 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
+
+
+def _extract_code(raw: str) -> str:
+    """Extrae el código alfanumérico de un label jerárquico.
+
+    'Categoria C1' → 'C1' · 'Familia T2' → 'T2' · 'Familia C1' → 'C1'
+    """
+    m = re.search(r'[A-Z]\d+', str(raw))
+    return m.group(0) if m else str(raw).strip()
 
 
 def load_raw_data() -> dict[str, pd.DataFrame]:
@@ -41,10 +51,24 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
     ventas['value'] = ventas['value'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     ventas['date'] = pd.to_datetime(ventas['date'], format='%m/%d/%Y', errors='coerce').dt.date
     
-    # 2. Productos
-    productos = pd.read_csv(DATA_DIR / "productos.csv")
-    productos.columns = ['product_id', 'analytical_block', 'category', 'subfamily']
-    productos['product_id'] = productos['product_id'].astype(str)
+    # 2. Productos — jerarquía canónica + aliases backward-compat
+    _prod_raw = pd.read_csv(DATA_DIR / "productos.csv")
+    _dynamics_map = {'Commodities': 'commodity', 'Productos Técnicos': 'technical'}
+    productos = pd.DataFrame({
+        'product_id':            _prod_raw.iloc[:, 0].astype(str),
+        # canónicos
+        'product_dynamics':      _prod_raw.iloc[:, 1].str.strip().map(_dynamics_map)
+                                     .fillna(_prod_raw.iloc[:, 1].str.lower().str.strip()),
+        'product_category_code': _prod_raw.iloc[:, 2].apply(_extract_code),
+        'product_family_code':   _prod_raw.iloc[:, 3].apply(_extract_code),
+        # backward-compat (mismo valor)
+        'analytical_block':      _prod_raw.iloc[:, 1].str.strip().map(_dynamics_map)
+                                     .fillna(_prod_raw.iloc[:, 1].str.lower().str.strip()),
+        'category':              _prod_raw.iloc[:, 2].apply(_extract_code),
+        'subfamily':             _prod_raw.iloc[:, 3].apply(_extract_code),
+    })
+    # product_category_name, product_family_name, product_display_name
+    # se calculan en main() tras cargar potencial (necesitan el mapping de nombres)
     
     # 3. Clientes
     clientes = pd.read_csv(DATA_DIR / "clientes.csv", dtype={'Unnamed: 1': 'string'})
@@ -57,17 +81,19 @@ def load_raw_data() -> dict[str, pd.DataFrame]:
     clientes['region_code'] = clientes['region_code'].astype('string').str.zfill(5)
     clientes = clientes.drop_duplicates(subset=['client_id'], keep='first')
     
-    # 4. Potencial
-    potencial = pd.read_csv(DATA_DIR / "potencial.csv")
-    potencial = potencial.rename(columns={
-        'Id.Cliente': 'client_id',
-        'Familia': 'family',
-        'Categoria Productos': 'category',
-        'Potencial_H': 'potential_annual'
+    # 4. Potencial — categoría normalizada a código
+    _pot_raw = pd.read_csv(DATA_DIR / "potencial.csv")
+    potencial = pd.DataFrame({
+        'client_id':             _pot_raw['Id.Cliente'].astype(int),
+        'family':                _pot_raw['Familia'].str.strip(),          # backward-compat
+        'potential_family_name': _pot_raw['Familia'].str.strip(),          # canónico
+        'category':              _pot_raw['Categoria Productos'].apply(_extract_code),  # C1/C2/T1
+        'potential_annual':      (_pot_raw['Potencial_H']
+                                      .astype(str)
+                                      .str.replace('.', '', regex=False)
+                                      .str.replace(',', '.', regex=False)
+                                      .astype(float)),
     })
-    potencial['client_id'] = potencial['client_id'].astype(int)
-    # Limpiar moneda y NaN
-    potencial['potential_annual'] = potencial['potential_annual'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     
     # 5. Campañas
     campanas = pd.read_csv(DATA_DIR / "campañas.csv")
@@ -182,6 +208,36 @@ def main() -> None:
     
     print("3. Evaluando calidad de potenciales (potential_quality)...")
     potencial = clean_potencial(raw["potencial"], ventas, raw["productos"])
+
+    print("3.5. Enriqueciendo jerarquía de productos con nombres comerciales...")
+    productos = raw["productos"].copy()
+    # Mapping código → nombre comercial (de potencial.csv · Familia column)
+    cat_name_map = (
+        potencial.drop_duplicates("category")
+                 .set_index("category")["potential_family_name"]
+                 .to_dict()
+    )  # {'C1': 'Anestesia', 'C2': 'Bioseguridad', 'T1': 'Biomateriales'}
+
+    productos["product_category_name"] = (
+        productos["product_category_code"].map(cat_name_map)
+        .fillna(productos["product_category_code"])
+    )
+
+    def _family_name(row: pd.Series) -> str:
+        if row["product_dynamics"] == "commodity":
+            return row["product_category_name"]
+        return f"{row['product_category_name']} · Familia {row['product_family_code']}"
+
+    def _display_name(row: pd.Series) -> str:
+        if row["product_dynamics"] == "commodity":
+            return f"{row['product_family_code']} · {row['product_category_name']}"
+        return (
+            f"{row['product_family_code']} · {row['product_category_name']}"
+            f" · Familia {row['product_family_code']}"
+        )
+
+    productos["product_family_name"]  = productos.apply(_family_name, axis=1)
+    productos["product_display_name"] = productos.apply(_display_name, axis=1)
     
     print("4. Escribiendo en base de datos (Idempotente)...")
     from sqlalchemy import text
@@ -203,7 +259,7 @@ def main() -> None:
     ventas = ventas[ventas["client_id"].isin(valid_clients) & ventas["product_id"].isin(valid_products)]
 
     write_table(raw["clientes"].drop_duplicates(subset=["client_id"]), "clients", engine)
-    write_table(raw["productos"].drop_duplicates(subset=["product_id"]), "products", engine)
+    write_table(productos.drop_duplicates(subset=["product_id"]), "products", engine)
     write_table(potencial.drop_duplicates(subset=["client_id", "family", "category"]), "client_potential", engine)
     write_table(ventas, "transactions", engine)
     write_table(raw["campanas"], "campaigns", engine)
@@ -213,10 +269,10 @@ def main() -> None:
     # Imprimir esquema para notificar a P2
     schema_info = {
         "clients": list(raw["clientes"].columns),
-        "products": list(raw["productos"].columns),
+        "products": list(productos.columns),
         "client_potential": list(potencial.columns),
         "transactions": list(ventas.columns),
-        "campaigns": list(raw["campanas"].columns)
+        "campaigns": list(raw["campanas"].columns),
     }
     print("\n" + "="*50)
     print(" SCHEMA FINAL PARA P2 (Big Yahu)")

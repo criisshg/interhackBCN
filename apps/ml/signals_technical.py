@@ -29,7 +29,7 @@ def detect_technical_signals(
         today = ventas['date'].max()
     
     # Filtrar solo technical (T1, T2)
-    prod_t = products[products['analytical_block'] == 'Technical']
+    prod_t = products[products['analytical_block'] == 'technical']
     ventas_t = ventas[ventas['product_id'].isin(prod_t['product_id'])].copy()
     ventas_t = ventas_t.merge(prod_t[['product_id', 'subfamily']], on='product_id', how='left')
     

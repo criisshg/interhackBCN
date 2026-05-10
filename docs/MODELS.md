@@ -6,6 +6,26 @@ Documentación viva de la lógica analítica. **Mantenido por P1.** Es el docume
 
 Heurísticas calibradas e interpretables > black-box mal explicado. Cada decisión documentada aquí debe ser defendible en 30 segundos.
 
+## Jerarquía de producto
+
+```
+Bloque analítico → Categoría (category) → Familia/Subfamilia (subfamily) → SKU (product_id)
+```
+
+| Bloque (`analytical_block`) | Categoría (`category`) | Familia (`subfamily`) | Nombre comercial |
+|---|---|---|---|
+| `commodity` | `C1` | `C1` | Anestesia |
+| `commodity` | `C2` | `C2` | Bioseguridad |
+| `technical` | `T1` | `T1` | Biomateriales · Familia T1 |
+| `technical` | `T1` | `T2` | Biomateriales · Familia T2 |
+
+**Puntos clave:**
+- **No existe Categoría T2.** T2 es una *familia* dentro de Categoría T1 (Biomateriales).
+- El potencial comercial existe a nivel `cliente × categoría`. Las familias T1 y T2 comparten el potencial de Categoría T1.
+- Los nombres comerciales (Anestesia, Bioseguridad, Biomateriales) provienen de `potencial.csv`. No existen nombres explícitos en el CSV para Familia T1 y Familia T2.
+- La tipología se calcula a nivel `cliente × subfamily` (C1/C2/T1/T2), no por SKU individual.
+- Columnas `product_category_name`, `product_family_name`, `product_display_name` en la tabla `products` proporcionan nombres humanos para UI y demos.
+
 ## Tabla de tipologías (cliente × subfamilia)
 
 | Tipología | Condición | Driver de intervención |
