@@ -54,6 +54,12 @@ def _clean_response(text: str) -> str:
     return cleaned.strip()
 
 
+def _should_use_suggested_email(text: str) -> bool:
+    lower = text.lower()
+    weak_phrases = ["hace tiempo", "esperamos que todo vaya bien", "estimado cliente"]
+    return any(phrase in lower for phrase in weak_phrases) or not lower.startswith(("**asunto:**", "asunto:"))
+
+
 @router.post("")
 def chat(payload: ChatIn) -> dict:
     client = _client()
@@ -65,6 +71,8 @@ def chat(payload: ChatIn) -> dict:
         tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],  # type: ignore[arg-type]
     )
 
+    last_draft: dict[str, Any] | None = None
+
     # Loop de tool-use: si Gemini pide una tool, la ejecutamos y devolvemos el resultado.
     for _ in range(8):  # max 8 iteraciones para evitar bucles infinitos
         response = client.models.generate_content(
@@ -73,7 +81,10 @@ def chat(payload: ChatIn) -> dict:
 
         function_calls = response.function_calls or []
         if not function_calls:
-            return {"role": "assistant", "content": _clean_response(response.text or "")}
+            text = _clean_response(response.text or "")
+            if last_draft and last_draft.get("suggested_email") and _should_use_suggested_email(text):
+                text = _clean_response(str(last_draft["suggested_email"]))
+            return {"role": "assistant", "content": text}
 
         # Añadir la respuesta del modelo (con function_call) a la conversación
         candidates = response.candidates or []
@@ -90,6 +101,8 @@ def chat(payload: ChatIn) -> dict:
             else:
                 try:
                     result = fn(**(call.args or {}))
+                    if name == "draft_outreach":
+                        last_draft = result
                 except NotImplementedError:
                     result = {"error": f"tool {name} not yet implemented"}
                 except Exception as e:  # noqa: BLE001 — surface to model

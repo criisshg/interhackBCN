@@ -11,11 +11,19 @@ Variables de entorno:
 from __future__ import annotations
 
 import os
+from datetime import date, datetime
 from typing import Any
 
 import httpx
 
 TIMEOUT = 10.0
+
+SUBFAMILY_LABELS = {
+    "C1": "anestésicos",
+    "C2": "bioseguridad",
+    "T1": "restauración",
+    "T2": "cirugía",
+}
 
 
 def _api_base_url() -> str:
@@ -159,6 +167,101 @@ def explain_alert(alert_id: int) -> dict[str, Any]:
     return _get(f"/alerts/{alert_id}")
 
 
+def _parse_date(value: Any) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _fmt_eur(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "sin dato"
+    if number <= 0:
+        return "sin dato"
+    if number >= 100:
+        return f"{number:,.0f}€".replace(",", ".")
+    return f"{number:,.2f}€".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fmt_date_es(value: date | None) -> str:
+    if value is None:
+        return "sin fecha"
+    return f"{value.day}/{value.month}/{value.year}"
+
+
+def _suggested_email(client: dict[str, Any], intent: str) -> str:
+    client_id = client.get("client_id") or client.get("id") or "sin ID"
+    alerts = client.get("alerts") or []
+    purchases = client.get("timeline") or []
+    alert = alerts[0] if alerts else {}
+    last_purchase = purchases[0] if purchases else {}
+
+    subfamily = (
+        alert.get("subfamilia")
+        or alert.get("subfamily")
+        or last_purchase.get("subfamilia")
+        or last_purchase.get("subfamily")
+        or last_purchase.get("category")
+        or "la subfamilia"
+    )
+    subfamily_text = SUBFAMILY_LABELS.get(str(subfamily), str(subfamily))
+    last_date = _parse_date(last_purchase.get("fecha") or last_purchase.get("date"))
+    days_since = (date.today() - last_date).days if last_date else None
+    value = _fmt_eur(last_purchase.get("valor") or last_purchase.get("value"))
+    province = client.get("province") or client.get("provincia") or "tu zona"
+
+    if intent == "reposicion":
+        subject = f"Próxima reposición de {subfamily_text}"
+        context = (
+            f"Queremos anticipar la próxima reposición en {subfamily_text} para evitar roturas de stock."
+        )
+    elif intent == "captura":
+        subject = f"Oportunidad en {subfamily_text} con Inibsa"
+        context = (
+            f"Vemos una oportunidad para acompañarte mejor en {subfamily_text} y ajustar la propuesta a tu volumen real."
+        )
+    else:
+        subject = f"Recuperar la reposición de {subfamily_text}"
+        context = (
+            f"Queremos entender si sigues trabajando {subfamily_text} y cómo podemos recuperar la reposición con Inibsa."
+        )
+
+    if days_since is not None:
+        opening = (
+            f"Hace {days_since} días que no registramos un pedido de {subfamily_text} "
+            f"para el cliente {client_id}; el último fue el {_fmt_date_es(last_date)} por {value}."
+        )
+    else:
+        opening = (
+            f"No tengo una última compra fechada para el cliente {client_id}, pero sí una señal activa "
+            f"relacionada con {subfamily_text}."
+        )
+
+    if alert.get("motivo"):
+        context = f"La alerta activa indica: {alert['motivo']}"
+
+    return "\n".join(
+        [
+            f"**Asunto:** {subject}",
+            "",
+            "Hola [Nombre],",
+            "",
+            opening,
+            context,
+            f"Te propongo una llamada breve para revisar necesidades actuales en {province} y acordar el siguiente pedido.",
+            "¿Te llamo el jueves a las 11:00?",
+            "",
+            "Un saludo,",
+            "Delegado de Inibsa",
+        ]
+    )
+
+
 def draft_outreach(client_id: int, intent: str) -> dict[str, Any]:
     """Devuelve contexto para que Gemini redacte el email."""
     client = get_client(client_id)
@@ -173,7 +276,9 @@ def draft_outreach(client_id: int, intent: str) -> dict[str, Any]:
         "active_alerts": client.get("alerts", []),
         "recent_purchases": (client.get("timeline") or [])[:5],
         "intent": intent,
+        "suggested_email": _suggested_email(client, intent),
         "instructions": (
+            f"Usa `suggested_email` como respuesta base y no añadas introducción. "
             f"Redacta un email comercial breve (3-5 frases) en español. "
             f"Intent: {intent}. Tono: profesional, directo, orientado a la acción. "
             f"Cita el client_id y la subfamilia más relevante. "
