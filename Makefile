@@ -1,7 +1,7 @@
 .PHONY: help setup install dev api web bootstrap \
         db-up db-start db-stop db-reset db-logs db-check \
         migrate seed recalc \
-        test-gemini test-chat chat-repl check deploy
+        test-gemini test-chat chat-repl demo-metrics reset-demo-metrics check deploy
 
 # === Help ===
 help:
@@ -36,7 +36,6 @@ help:
 	@echo "  Deploy:"
 	@echo "    make deploy       Push a main (CI desplega Vercel + Render)"
 	@echo ""
-
 # === Setup ===
 # Quick setup para todo el equipo. Detecta SO automáticamente.
 # Crea venv, instala Python deps, npm deps, y copia .env.example → .env
@@ -102,6 +101,13 @@ seed:
 
 recalc:
 	cd apps/ml && python -m run_signals
+
+# === Demo ===
+demo-metrics:
+	python scripts/demo_metrics.py seed
+
+reset-demo-metrics:
+	python scripts/demo_metrics.py reset
 
 # === Tests ===
 test-gemini:
