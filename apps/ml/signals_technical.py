@@ -51,8 +51,9 @@ def detect_technical_signals(
         if len(group) < min_periods:
             continue
             
-        group = group.sort_values('month').set_index('month')
-        
+        # Solo 'value' antes del reindex — evita TypeError en pandas 2.x con columnas string
+        group = group[['month', 'value']].sort_values('month').set_index('month')
+
         # Asegurar todos los meses entre su primera compra y HOY
         all_months = pd.period_range(start=group.index.min(), end=current_month, freq='M')
         group = group.reindex(all_months, fill_value=0).reset_index()
