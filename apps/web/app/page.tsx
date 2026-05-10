@@ -1409,6 +1409,107 @@ const SEED: ChatBubble[] = [
   },
 ];
 
+function splitMarkdownRow(line: string) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function isMarkdownTableSeparator(line: string) {
+  const cells = splitMarkdownRow(line);
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, "")));
+}
+
+function renderInlineMarkdown(text: string, keyPrefix: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g).filter(Boolean);
+  return parts.map((part, idx) => {
+    const key = `${keyPrefix}-${idx}`;
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={key}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={key}>{part.slice(1, -1)}</code>;
+    if (part.startsWith("*") && part.endsWith("*")) return <em key={key}>{part.slice(1, -1)}</em>;
+    return <span key={key}>{part}</span>;
+  });
+}
+
+function MarkdownMessage({ text }: { text: string }) {
+  const lines = text.trim().split(/\r?\n/);
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) {
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith("|") && lines[i + 1]?.trim().startsWith("|") && isMarkdownTableSeparator(lines[i + 1])) {
+      const headers = splitMarkdownRow(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        rows.push(splitMarkdownRow(lines[i]));
+        i += 1;
+      }
+      blocks.push(
+        <div className="markdown-table-wrap" key={`table-${blocks.length}`}>
+          <table>
+            <thead>
+              <tr>
+                {headers.map((header, idx) => (
+                  <th key={idx}>{renderInlineMarkdown(header, `th-${blocks.length}-${idx}`)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIdx) => (
+                <tr key={rowIdx}>
+                  {headers.map((_, cellIdx) => (
+                    <td key={cellIdx}>{renderInlineMarkdown(row[cellIdx] ?? "", `td-${blocks.length}-${rowIdx}-${cellIdx}`)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[-*]\s+/, ""));
+        i += 1;
+      }
+      blocks.push(
+        <ul key={`ul-${blocks.length}`}>
+          {items.map((item, idx) => (
+            <li key={idx}>{renderInlineMarkdown(item, `li-${blocks.length}-${idx}`)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    const isQuote = line.startsWith(">");
+    const content = isQuote ? line.replace(/^>\s?/, "") : line;
+    blocks.push(
+      isQuote ? (
+        <blockquote key={`quote-${blocks.length}`}>{renderInlineMarkdown(content, `quote-${blocks.length}`)}</blockquote>
+      ) : (
+        <p key={`p-${blocks.length}`}>{renderInlineMarkdown(content, `p-${blocks.length}`)}</p>
+      ),
+    );
+    i += 1;
+  }
+
+  return <>{blocks}</>;
+}
+
 function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatBubble[]>(SEED);
   const [draft, setDraft] = useState("");
@@ -1621,7 +1722,7 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
             }
             return (
               <div key={i} className="msg-bot">
-                {m.text}
+                <MarkdownMessage text={m.text} />
               </div>
             );
           })}

@@ -442,17 +442,61 @@ table.alerts tbody td:first-child::before {
   font-size: 13px;
   line-height: 1.55;
 }
+.msg-bot p {
+  margin: 0 0 8px;
+}
+.msg-bot p:last-child {
+  margin-bottom: 0;
+}
+.msg-bot strong {
+  font-weight: 700;
+  color: var(--pulse-blue-deep);
+}
+.msg-bot em {
+  color: var(--text-muted);
+}
+.msg-bot code {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  background: #eef5f9;
+  border: 1px solid #dceaf3;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.msg-bot ul {
+  margin: 6px 0 8px;
+  padding-left: 18px;
+}
+.msg-bot li {
+  margin: 4px 0;
+}
+.msg-bot blockquote {
+  margin: 8px 0;
+  padding: 7px 9px;
+  border-left: 3px solid var(--pulse-blue);
+  background: #fff;
+  border-radius: 5px;
+  color: var(--text-muted);
+}
+.markdown-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 8px 0;
+}
 .msg-bot table {
   width: 100%;
   border-collapse: collapse;
   margin: 8px 0;
   font-size: 12px;
+  min-width: 420px;
+  table-layout: auto;
 }
 .msg-bot th,
 .msg-bot td {
   padding: 5px 7px;
   border-bottom: 1px solid #e3ebf1;
   text-align: left;
+  vertical-align: top;
 }
 .msg-bot th {
   font-weight: 700;
