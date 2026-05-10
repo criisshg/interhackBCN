@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -54,8 +55,181 @@ def _clean_response(text: str) -> str:
     return cleaned.strip()
 
 
+def _latest_user_text(messages: list[dict]) -> str:
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return str(message.get("content") or "")
+    return ""
+
+
+def _normalize(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text.lower())
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _extract_limit(text: str, default: int = 5) -> int:
+    match = re.search(r"\b(\d{1,2})\b", text)
+    if not match:
+        return default
+    return min(max(int(match.group(1)), 1), 10)
+
+
+def _number(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _fmt_eur(value: Any) -> str:
+    number = _number(value)
+    return f"{number:,.0f}€".replace(",", ".")
+
+
+def _direct_chart_response(user_text: str) -> dict[str, Any] | None:
+    """Fallback determinista: crea gráficas pedidas explícitamente sin depender de Gemini."""
+    q = _normalize(user_text)
+    chart_words = (
+        "grafico",
+        "grafic",
+        "chart",
+        "visualizacion",
+        "visualitzacio",
+        "barra",
+        "bar",
+        "pie",
+        "linea",
+        "evolucion",
+        "distribucion",
+    )
+    if not any(word in q for word in chart_words):
+        return None
+
+    if "alerta" in q and any(word in q for word in ("impacto", "ranking", "top", "barra", "bar")):
+        limit = _extract_limit(q)
+        get_alerts = cast(Callable[..., dict[str, Any]], TOOL_FUNCTIONS["get_alerts"])
+        result = get_alerts(limit=100)
+        items = result.get("items") if isinstance(result, dict) else None
+        if not isinstance(items, list) or not items:
+            return {
+                "role": "assistant",
+                "content": "No he podido recuperar alertas para construir la gráfica.",
+                "charts": [],
+            }
+
+        top = sorted(items, key=lambda item: _number(item.get("impacto_estimado")), reverse=True)[:limit]
+        data = [
+            {
+                "alerta": f"#{item.get('id')}",
+                "impacto": round(_number(item.get("impacto_estimado")), 2),
+            }
+            for item in top
+        ]
+        chart = {
+            "chart_type": "bar",
+            "data": data,
+            "x_key": "alerta",
+            "y_key": "impacto",
+            "title": f"Top {len(data)} alertas por impacto estimado",
+            "caption": "Impacto estimado en euros, calculado desde las alertas activas.",
+        }
+        leader = top[0]
+        content = (
+            f"La alerta con mayor impacto es **#{leader.get('id')}**, cliente "
+            f"**{leader.get('client_id')}**, con impacto estimado de "
+            f"**{_fmt_eur(leader.get('impacto_estimado'))}**."
+        )
+        return {"role": "assistant", "content": content, "charts": [chart]}
+
+    if "alerta" in q and any(word in q for word in ("tipologia", "canal", "tipo", "distribucion", "pie")):
+        get_alerts = cast(Callable[..., dict[str, Any]], TOOL_FUNCTIONS["get_alerts"])
+        result = get_alerts(limit=100)
+        items = result.get("items") if isinstance(result, dict) else None
+        if not isinstance(items, list) or not items:
+            return {
+                "role": "assistant",
+                "content": "No he podido recuperar alertas para construir la gráfica.",
+                "charts": [],
+            }
+
+        if "canal" in q:
+            key, label = "canal_recomendado", "canal"
+        elif "tipo" in q and "tipologia" not in q:
+            key, label = "tipo_dinamica", "tipo"
+        else:
+            key, label = "tipologia_cliente", "tipología"
+
+        counts: dict[str, int] = {}
+        for item in items:
+            name = str(item.get(key) or "sin dato")
+            counts[name] = counts.get(name, 0) + 1
+
+        data = [{"categoria": name, "alertas": count} for name, count in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)]
+        chart = {
+            "chart_type": "pie",
+            "data": data[:6],
+            "x_key": "categoria",
+            "y_key": "alertas",
+            "title": f"Distribución de alertas por {label}",
+            "caption": "Muestra hasta 100 alertas recuperadas de la API.",
+        }
+        content = f"La categoría dominante es **{data[0]['categoria']}**, con **{data[0]['alertas']} alertas** en la muestra."
+        return {"role": "assistant", "content": content, "charts": [chart]}
+
+    if any(word in q for word in ("evolucion", "linea", "line", "compras")) and "cliente" in q:
+        id_match = re.search(r"\b(\d{5,})\b", q)
+        if not id_match:
+            return {
+                "role": "assistant",
+                "content": "Dime el ID del cliente para poder pintar la evolución de compras.",
+                "charts": [],
+            }
+        client_id = int(id_match.group(1))
+        get_client = cast(Callable[..., dict[str, Any]], TOOL_FUNCTIONS["get_client"])
+        result = get_client(client_id=client_id)
+        timeline = result.get("timeline") if isinstance(result, dict) else None
+        if not isinstance(timeline, list) or len(timeline) <= 3:
+            return {
+                "role": "assistant",
+                "content": f"No tengo suficientes compras del cliente **{client_id}** para pintar una evolución útil.",
+                "charts": [],
+            }
+
+        monthly: dict[str, float] = {}
+        for row in timeline:
+            raw_date = str(row.get("fecha") or row.get("date") or "")
+            month = raw_date[:7]
+            if len(month) != 7:
+                continue
+            monthly[month] = monthly.get(month, 0.0) + _number(row.get("valor") or row.get("value"))
+
+        data = [{"mes": month, "ventas": round(value, 2)} for month, value in sorted(monthly.items())[-8:]]
+        if len(data) <= 3:
+            return {
+                "role": "assistant",
+                "content": f"No tengo suficientes meses del cliente **{client_id}** para pintar una línea útil.",
+                "charts": [],
+            }
+        chart = {
+            "chart_type": "line",
+            "data": data,
+            "x_key": "mes",
+            "y_key": "ventas",
+            "title": f"Evolución de compras del cliente {client_id}",
+            "caption": "Ventas mensuales agrupadas desde el timeline del cliente.",
+        }
+        content = f"La evolución muestra **{len(data)} meses** con compras registradas para el cliente **{client_id}**."
+        return {"role": "assistant", "content": content, "charts": [chart]}
+
+    return None
+
+
 @router.post("")
 def chat(payload: ChatIn) -> dict:
+    direct_chart = _direct_chart_response(_latest_user_text(payload.messages))
+    if direct_chart is not None:
+        return direct_chart
+
     client = _client()
     contents = _to_gemini_contents(payload.messages)
 
