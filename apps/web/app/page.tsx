@@ -1872,6 +1872,133 @@ function formatRoundedEUR(value: number) {
   return `${Math.round(value).toLocaleString("es-ES")}€`;
 }
 
+function relevantAlertsForQuery(text: string, alerts: AlertItem[]) {
+  const q = normalizeQuery(text);
+  let scoped = alerts;
+
+  const provinceHit = alerts.find((a) => a.province && q.includes(normalizeQuery(a.province)));
+  if (provinceHit?.province) {
+    const province = normalizeQuery(provinceHit.province);
+    scoped = scoped.filter((a) => a.province && normalizeQuery(a.province) === province);
+  }
+
+  if (q.includes("at-risk") || q.includes("at risk") || q.includes("riesgo") || q.includes("risc")) {
+    scoped = scoped.filter((a) => a.tipologia_cliente === "at_risk");
+  } else if (q.includes("promiscu")) {
+    scoped = scoped.filter((a) => a.tipologia_cliente === "promiscuous");
+  } else if (q.includes("loyal") || q.includes("leal") || q.includes("fiel")) {
+    scoped = scoped.filter((a) => a.tipologia_cliente === "loyal");
+  } else if (q.includes("marginal")) {
+    scoped = scoped.filter((a) => a.tipologia_cliente === "marginal");
+  }
+
+  if (q.includes("commodity")) {
+    scoped = scoped.filter((a) => a.tipo_dinamica === "commodity");
+  } else if (q.includes("technical") || q.includes("tecnico")) {
+    scoped = scoped.filter((a) => a.tipo_dinamica === "technical");
+  }
+
+  return scoped.length ? scoped : alerts;
+}
+
+function priorityLineChart(alerts: AlertItem[], limit: number): ChartSpec | null {
+  const top = [...alerts].sort((a, b) => b.prioridad_score - a.prioridad_score).slice(0, limit);
+  if (top.length < 2) return null;
+  return {
+    chart_type: "line",
+    data: top.map((a, idx) => ({
+      alerta: `${idx + 1} · #${a.id}`,
+      prioridad: Number(a.prioridad_score.toFixed(2)),
+    })),
+    x_key: "alerta",
+    y_key: "prioridad",
+    title: `Curva de prioridad de las ${top.length} alertas principales`,
+    caption: "Ranking descendente por prioridad_score; la pendiente muestra cuánto cae la urgencia comercial.",
+  };
+}
+
+function impactBarChart(alerts: AlertItem[], limit: number): ChartSpec | null {
+  const top = [...alerts].sort((a, b) => b.impacto_estimado - a.impacto_estimado).slice(0, limit);
+  if (top.length < 2) return null;
+  return {
+    chart_type: "bar",
+    data: top.map((a) => ({ alerta: `#${a.id}`, impacto: Math.round(a.impacto_estimado) })),
+    x_key: "alerta",
+    y_key: "impacto",
+    title: `Top ${top.length} alertas por impacto estimado`,
+    caption: "Impacto estimado en euros, calculado desde las alertas cargadas en el dashboard.",
+  };
+}
+
+function distributionPieChart(alerts: AlertItem[], key: keyof AlertItem, label: string): ChartSpec | null {
+  const counts = alerts.reduce<Record<string, number>>((acc, alert) => {
+    const name = String(alert[key] ?? "sin dato");
+    acc[name] = (acc[name] ?? 0) + 1;
+    return acc;
+  }, {});
+  const data = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([categoria, alertas]) => ({ categoria, alertas }));
+  if (data.length < 2) return null;
+  return {
+    chart_type: "pie",
+    data,
+    x_key: "categoria",
+    y_key: "alertas",
+    title: `Distribución de alertas por ${label}`,
+    caption: "Distribución calculada desde las alertas cargadas en el dashboard.",
+  };
+}
+
+function implicitChartsForQuery(text: string, alerts: AlertItem[]): ChartSpec[] {
+  const q = normalizeQuery(text);
+  if (!alerts.length) return [];
+
+  const asksAboutAlerts =
+    q.includes("alerta") || q.includes("cliente") || q.includes("prioridad") || q.includes("urgent") || q.includes("riesgo");
+  if (!asksAboutAlerts) return [];
+
+  const scoped = relevantAlertsForQuery(text, alerts);
+  const limit = extractChartLimit(q, 5);
+
+  if (q.includes("distribucion") || q.includes("reparto") || q.includes("proporcion") || q.includes("tipologia")) {
+    const chart = distributionPieChart(scoped, "tipologia_cliente", "tipología");
+    return chart ? [chart] : [];
+  }
+
+  if (q.includes("canal")) {
+    const chart = distributionPieChart(scoped, "canal_recomendado", "canal");
+    return chart ? [chart] : [];
+  }
+
+  if (q.includes("estado")) {
+    const chart = distributionPieChart(scoped, "estado", "estado");
+    return chart ? [chart] : [];
+  }
+
+  if (q.includes("impacto") || q.includes("pipeline") || q.includes("€")) {
+    const chart = impactBarChart(scoped, limit);
+    return chart ? [chart] : [];
+  }
+
+  if (
+    q.includes("prioritaria") ||
+    q.includes("prioritario") ||
+    q.includes("prioridad") ||
+    q.includes("urgente") ||
+    q.includes("at-risk") ||
+    q.includes("at risk") ||
+    q.includes("riesgo") ||
+    q.includes("risc")
+  ) {
+    const chart = priorityLineChart(scoped, limit);
+    return chart ? [chart] : [];
+  }
+
+  return [];
+}
+
 function chartResponseFromAlerts(text: string, alerts: AlertItem[]): { content: string; charts: ChartSpec[] } | null {
   const q = normalizeQuery(text);
   const wantsChart = [
@@ -1889,17 +2016,33 @@ function chartResponseFromAlerts(text: string, alerts: AlertItem[]): { content: 
   ].some((word) => q.includes(word));
   if (!wantsChart || alerts.length === 0) return null;
 
+  if (
+    q.includes("prioritaria") ||
+    q.includes("prioritario") ||
+    q.includes("prioridad") ||
+    q.includes("urgente") ||
+    q.includes("at-risk") ||
+    q.includes("at risk") ||
+    q.includes("riesgo") ||
+    q.includes("risc")
+  ) {
+    const scoped = relevantAlertsForQuery(text, alerts);
+    const limit = extractChartLimit(q);
+    const spec = priorityLineChart(scoped, limit);
+    if (!spec) return null;
+    const leader = [...scoped].sort((a, b) => b.prioridad_score - a.prioridad_score)[0];
+    return {
+      content: `La alerta más prioritaria es **#${leader.id}**, cliente **${leader.client_id}**, con score **${leader.prioridad_score.toFixed(2)}**.`,
+      charts: [spec],
+    };
+  }
+
   if (q.includes("impacto") || q.includes("ranking") || q.includes("top") || q.includes("barra") || q.includes("barres")) {
     const limit = extractChartLimit(q);
-    const top = [...alerts].sort((a, b) => b.impacto_estimado - a.impacto_estimado).slice(0, limit);
-    const spec: ChartSpec = {
-      chart_type: "bar",
-      data: top.map((a) => ({ alerta: `#${a.id}`, impacto: Math.round(a.impacto_estimado) })),
-      x_key: "alerta",
-      y_key: "impacto",
-      title: `Top ${top.length} alertas por impacto estimado`,
-      caption: "Impacto estimado en euros, calculado desde las alertas cargadas en el dashboard.",
-    };
+    const scoped = relevantAlertsForQuery(text, alerts);
+    const top = [...scoped].sort((a, b) => b.impacto_estimado - a.impacto_estimado).slice(0, limit);
+    const spec = impactBarChart(scoped, limit);
+    if (!spec) return null;
     const leader = top[0];
     return {
       content: `La alerta con mayor impacto es **#${leader.id}**, cliente **${leader.client_id}**, con **${formatRoundedEUR(leader.impacto_estimado)}** estimados.`,
@@ -1908,6 +2051,7 @@ function chartResponseFromAlerts(text: string, alerts: AlertItem[]): { content: 
   }
 
   if (q.includes("tipologia") || q.includes("canal") || q.includes("tipo") || q.includes("estado") || q.includes("pie") || q.includes("distribucion")) {
+    const scoped = relevantAlertsForQuery(text, alerts);
     const key: keyof AlertItem = q.includes("canal")
       ? "canal_recomendado"
       : q.includes("estado")
@@ -1917,23 +2061,9 @@ function chartResponseFromAlerts(text: string, alerts: AlertItem[]): { content: 
       : "tipologia_cliente";
     const label =
       key === "canal_recomendado" ? "canal" : key === "estado" ? "estado" : key === "tipo_dinamica" ? "tipo" : "tipología";
-    const counts = alerts.reduce<Record<string, number>>((acc, alert) => {
-      const name = String(alert[key] ?? "sin dato");
-      acc[name] = (acc[name] ?? 0) + 1;
-      return acc;
-    }, {});
-    const data = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([categoria, alertas]) => ({ categoria, alertas }));
-    const spec: ChartSpec = {
-      chart_type: "pie",
-      data,
-      x_key: "categoria",
-      y_key: "alertas",
-      title: `Distribución de alertas por ${label}`,
-      caption: "Distribución calculada desde las alertas cargadas en el dashboard.",
-    };
+    const spec = distributionPieChart(scoped, key, label);
+    if (!spec) return null;
+    const data = spec.data as Array<{ categoria: string; alertas: number }>;
     return {
       content: `La categoría principal es **${data[0].categoria}**, con **${data[0].alertas} alertas**.`,
       charts: [spec],
@@ -2029,7 +2159,8 @@ function Chat({ open, onClose, alerts }: { open: boolean; onClose: () => void; a
       .then((r) => {
         setTyping(false);
         const reply: ChatBubble = { role: "bot", kind: "plain", text: r.content };
-        const chartBubbles: ChatBubble[] = (r.charts ?? []).map((spec) => ({
+        const companionCharts = r.charts?.length ? r.charts : implicitChartsForQuery(t, alerts);
+        const chartBubbles: ChatBubble[] = companionCharts.map((spec) => ({
           role: "bot" as const,
           kind: "chart" as const,
           spec,
