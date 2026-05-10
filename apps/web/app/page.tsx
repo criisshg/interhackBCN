@@ -1675,6 +1675,7 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
 
 const SUGGESTIONS = [
   "Dame las 5 alertas más prioritarias",
+  "Gráfico de barras: top 5 por impacto",
   "Clientes at-risk en Madrid",
   "Redacta un email para el cliente 1000077009",
   "Explica la alerta 2627",
@@ -1854,7 +1855,120 @@ function ChartBubble({ spec }: { spec: ChartSpec }) {
   );
 }
 
-function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
+function normalizeQuery(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function extractChartLimit(text: string, fallback = 5) {
+  const match = text.match(/\b(\d{1,2})\b/);
+  if (!match) return fallback;
+  return Math.min(Math.max(Number(match[1]), 1), 10);
+}
+
+function formatRoundedEUR(value: number) {
+  return `${Math.round(value).toLocaleString("es-ES")}€`;
+}
+
+function chartResponseFromAlerts(text: string, alerts: AlertItem[]): { content: string; charts: ChartSpec[] } | null {
+  const q = normalizeQuery(text);
+  const wantsChart = [
+    "grafico",
+    "grafic",
+    "chart",
+    "barra",
+    "barres",
+    "barras",
+    "pie",
+    "pastel",
+    "distribucion",
+    "evolucion",
+    "linea",
+  ].some((word) => q.includes(word));
+  if (!wantsChart || alerts.length === 0) return null;
+
+  if (q.includes("impacto") || q.includes("ranking") || q.includes("top") || q.includes("barra") || q.includes("barres")) {
+    const limit = extractChartLimit(q);
+    const top = [...alerts].sort((a, b) => b.impacto_estimado - a.impacto_estimado).slice(0, limit);
+    const spec: ChartSpec = {
+      chart_type: "bar",
+      data: top.map((a) => ({ alerta: `#${a.id}`, impacto: Math.round(a.impacto_estimado) })),
+      x_key: "alerta",
+      y_key: "impacto",
+      title: `Top ${top.length} alertas por impacto estimado`,
+      caption: "Impacto estimado en euros, calculado desde las alertas cargadas en el dashboard.",
+    };
+    const leader = top[0];
+    return {
+      content: `La alerta con mayor impacto es **#${leader.id}**, cliente **${leader.client_id}**, con **${formatRoundedEUR(leader.impacto_estimado)}** estimados.`,
+      charts: [spec],
+    };
+  }
+
+  if (q.includes("tipologia") || q.includes("canal") || q.includes("tipo") || q.includes("estado") || q.includes("pie") || q.includes("distribucion")) {
+    const key: keyof AlertItem = q.includes("canal")
+      ? "canal_recomendado"
+      : q.includes("estado")
+      ? "estado"
+      : q.includes("tipo") && !q.includes("tipologia")
+      ? "tipo_dinamica"
+      : "tipologia_cliente";
+    const label =
+      key === "canal_recomendado" ? "canal" : key === "estado" ? "estado" : key === "tipo_dinamica" ? "tipo" : "tipología";
+    const counts = alerts.reduce<Record<string, number>>((acc, alert) => {
+      const name = String(alert[key] ?? "sin dato");
+      acc[name] = (acc[name] ?? 0) + 1;
+      return acc;
+    }, {});
+    const data = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([categoria, alertas]) => ({ categoria, alertas }));
+    const spec: ChartSpec = {
+      chart_type: "pie",
+      data,
+      x_key: "categoria",
+      y_key: "alertas",
+      title: `Distribución de alertas por ${label}`,
+      caption: "Distribución calculada desde las alertas cargadas en el dashboard.",
+    };
+    return {
+      content: `La categoría principal es **${data[0].categoria}**, con **${data[0].alertas} alertas**.`,
+      charts: [spec],
+    };
+  }
+
+  if (q.includes("evolucion") || q.includes("linea")) {
+    const buckets = alerts.reduce<Record<string, number>>((acc, alert) => {
+      const month = alert.fecha.slice(0, 7);
+      acc[month] = (acc[month] ?? 0) + 1;
+      return acc;
+    }, {});
+    const data = Object.entries(buckets)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-8)
+      .map(([mes, alertas]) => ({ mes, alertas }));
+    if (data.length <= 1) return null;
+    const spec: ChartSpec = {
+      chart_type: "line",
+      data,
+      x_key: "mes",
+      y_key: "alertas",
+      title: "Evolución de alertas",
+      caption: "Alertas agrupadas por mes desde la muestra cargada.",
+    };
+    return {
+      content: `He agrupado **${alerts.length} alertas** por mes para ver la evolución de la señal.`,
+      charts: [spec],
+    };
+  }
+
+  return null;
+}
+
+function Chat({ open, onClose, alerts }: { open: boolean; onClose: () => void; alerts: AlertItem[] }) {
   const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [draft, setDraft] = useState("");
   const [voice, setVoice] = useState(false);
@@ -1884,6 +1998,20 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
     const userMsg: ChatBubble = { role: "user", text: t };
     setMessages((m) => [...m, userMsg]);
     setDraft("");
+
+    const localChart = chartResponseFromAlerts(t, alerts);
+    if (localChart) {
+      const reply: ChatBubble = { role: "bot", kind: "plain", text: localChart.content };
+      const chartBubbles: ChatBubble[] = localChart.charts.map((spec) => ({
+        role: "bot" as const,
+        kind: "chart" as const,
+        spec,
+      }));
+      setMessages((m) => [...m, reply, ...chartBubbles]);
+      if (voice) void playVoice(localChart.content);
+      return;
+    }
+
     setTyping(true);
 
     const history: ChatMessage[] = [...messages, userMsg]
@@ -2330,7 +2458,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <Chat open={chatOpen} onClose={() => setChatOpen(false)} />
+      <Chat open={chatOpen} onClose={() => setChatOpen(false)} alerts={alerts} />
     </div>
   );
 }
