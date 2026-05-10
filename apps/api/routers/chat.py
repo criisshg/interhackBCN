@@ -6,6 +6,7 @@ listo para conectar al SDK `google-genai`.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -44,6 +45,15 @@ def _to_gemini_contents(messages: list[dict]) -> list[types.Content]:
     ]
 
 
+def _clean_response(text: str) -> str:
+    """Pequeño pulido defensivo para mantener el chat escaneable."""
+    cleaned = text.strip()
+    cleaned = re.sub(r"^(claro|por supuesto|aquí tienes)[,:\s]+", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+(\*Nota:)", r"\n\n\1", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 @router.post("")
 def chat(payload: ChatIn) -> dict:
     client = _client()
@@ -51,6 +61,7 @@ def chat(payload: ChatIn) -> dict:
 
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
+        temperature=0.2,
         tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],  # type: ignore[arg-type]
     )
 
@@ -62,7 +73,7 @@ def chat(payload: ChatIn) -> dict:
 
         function_calls = response.function_calls or []
         if not function_calls:
-            return {"role": "assistant", "content": response.text or ""}
+            return {"role": "assistant", "content": _clean_response(response.text or "")}
 
         # Añadir la respuesta del modelo (con function_call) a la conversación
         candidates = response.candidates or []

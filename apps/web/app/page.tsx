@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -329,6 +329,39 @@ function StateChip({ label, n, color }: { label: string; n: number; color: strin
       <strong style={{ fontVariantNumeric: "tabular-nums" }}>{n}</strong>
     </span>
   );
+}
+
+function rate(numerator: number, denominator: number) {
+  if (!denominator) return 0;
+  return Math.round((numerator / denominator) * 10000) / 10000;
+}
+
+function deriveMetricsFromAlerts(alerts: AlertItem[], fallback: Metrics): Metrics {
+  if (!alerts.length) return fallback;
+
+  const converted = alerts.filter((a) => a.estado === "convertida").length;
+  const falsePositive = alerts.filter((a) => a.estado === "desestimada").length;
+  const expired = alerts.filter((a) => a.estado === "expirada").length;
+  const inProgress = alerts.filter((a) => a.estado === "en_curso").length;
+  const closed = converted + falsePositive + expired;
+  const touched = closed + inProgress;
+  const atRiskClosed = alerts.filter(
+    (a) => a.tipologia_cliente === "at_risk" && ["convertida", "desestimada", "expirada"].includes(a.estado),
+  ).length;
+  const atRiskRecovered = alerts.filter((a) => a.tipologia_cliente === "at_risk" && a.estado === "convertida").length;
+
+  return {
+    conversion_rate: rate(converted, closed),
+    false_positive_rate: rate(falsePositive, closed),
+    inactive_recovery_rate: atRiskClosed ? rate(atRiskRecovered, atRiskClosed) : rate(converted, closed),
+    coverage_rate: rate(touched, alerts.length),
+    actions: {
+      closed,
+      converted,
+      false_positive: falsePositive,
+      in_progress: inProgress,
+    },
+  };
 }
 
 /* ---------------- Tab 1 · Alert Center ---------------- */
@@ -1638,7 +1671,12 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
 
 /* ---------------- Chat panel ---------------- */
 
-const SUGGESTIONS = ["Top alertas urgentes", "Clientes at-risk en Madrid", "Redactar email de recuperación", "Explica alerta #142"];
+const SUGGESTIONS = [
+  "Dame las 5 alertas más prioritarias",
+  "Clientes at-risk en Madrid",
+  "Redacta un email para el cliente 1000077009",
+  "Explica la alerta 2627",
+];
 
 type ChatBubble =
   | { role: "user"; text: string }
@@ -1646,36 +1684,132 @@ type ChatBubble =
   | { role: "bot"; kind: "table"; intro: string; rows: string[][]; foot: string }
   | { role: "bot"; kind: "email"; subject: string; body: string[] };
 
-const SEED: ChatBubble[] = [
-  { role: "user", text: "¿Cuáles son las alertas más urgentes en Barcelona?" },
-  {
-    role: "bot",
-    kind: "table",
-    intro: "Triage Barcelona, P0 ordenadas por urgencia:",
-    rows: [
-      ["#142", "CL-4821", "Technical", "3d"],
-      ["#163", "CL-7733", "Commodity", "11d"],
-      ["#87", "CL-7710", "Technical", "3d"],
-    ],
-    foot: "Priorizaría #142 — caída sostenida en anestésicos con impacto alto.",
-  },
-  { role: "user", text: "Redacta un email de recuperación para el cliente 4821" },
-  {
-    role: "bot",
-    kind: "email",
-    subject: "Asunto: Revisión de necesidades en anestesia dental",
-    body: [
-      "Hola, equipo,",
-      "Hemos detectado una bajada sostenida en la reposición de anestésicos frente a vuestro patrón habitual. Queríamos revisar si se debe a un cambio de planificación clínica, stock disponible o nuevas necesidades de producto.",
-      "¿Os iría bien una llamada breve esta semana para anticipar la próxima reposición y evitar roturas?",
-      "Un saludo,",
-      "Equipo Inibsa",
-    ],
-  },
-];
+const CHAT_INTRO =
+  "Estoy conectado a las alertas reales. Pregúntame por prioridades, provincias, clientes o borradores comerciales.";
+
+function renderInline(text: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const token = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(text))) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const raw = match[0];
+    const key = `${match.index}-${raw}`;
+    if (raw.startsWith("**")) parts.push(<strong key={key}>{raw.slice(2, -2)}</strong>);
+    else if (raw.startsWith("`")) parts.push(<code key={key}>{raw.slice(1, -1)}</code>);
+    else parts.push(<em key={key}>{raw.slice(1, -1)}</em>);
+    last = match.index + raw.length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function splitTableRow(line: string) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function isMarkdownSeparator(line: string) {
+  return splitTableRow(line).every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function MarkdownMessage({ text }: { text: string }) {
+  const lines = text.split(/\r?\n/);
+  const nodes: ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) {
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith("|") && lines[i + 1]?.trim().startsWith("|") && isMarkdownSeparator(lines[i + 1])) {
+      const header = splitTableRow(line);
+      i += 2;
+      const body: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        body.push(splitTableRow(lines[i]));
+        i += 1;
+      }
+      nodes.push(
+        <div className="markdown-table-wrap" key={`table-${i}`}>
+          <table>
+            <thead>
+              <tr>
+                {header.map((h) => (
+                  <th key={h}>{renderInline(h)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, idx) => (
+                <tr key={`${idx}-${row.join("-")}`}>
+                  {row.map((cell, cidx) => (
+                    <td key={cidx}>{renderInline(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
+    if (line.startsWith("- ")) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("- ")) {
+        items.push(lines[i].trim().slice(2));
+        i += 1;
+      }
+      nodes.push(
+        <ul key={`ul-${i}`}>
+          {items.map((item, idx) => (
+            <li key={`${idx}-${item}`}>{renderInline(item)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    if (line.startsWith(">")) {
+      const quote: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) {
+        quote.push(lines[i].trim().replace(/^>\s?/, ""));
+        i += 1;
+      }
+      nodes.push(<blockquote key={`q-${i}`}>{renderInline(quote.join(" "))}</blockquote>);
+      continue;
+    }
+
+    const paragraph: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !lines[i].trim().startsWith("|") &&
+      !lines[i].trim().startsWith("- ") &&
+      !lines[i].trim().startsWith(">")
+    ) {
+      paragraph.push(lines[i].trim());
+      i += 1;
+    }
+    paragraph.forEach((p, idx) => {
+      nodes.push(<p key={`p-${i}-${idx}`}>{renderInline(p)}</p>);
+    });
+  }
+
+  return <>{nodes}</>;
+}
 
 function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [messages, setMessages] = useState<ChatBubble[]>(SEED);
+  const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [draft, setDraft] = useState("");
   const [voice, setVoice] = useState(false);
   const [typing, setTyping] = useState(false);
@@ -1731,16 +1865,14 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
           {
             role: "bot",
             kind: "plain",
-            text: `He recuperado 4 registros relacionados con "${t}". ¿Quieres que abra el detalle de la más urgente o prepare un resumen ejecutivo?`,
+            text: "No he podido conectar con el copiloto ahora mismo. Prueba de nuevo en unos segundos.",
           },
         ]);
       });
   };
 
   const fillChip = (s: string) => {
-    if (s.startsWith("Redactar")) send("Redacta un email de recuperación para el cliente CL-4821");
-    else if (s.startsWith("Explica")) send("Explica la lógica detrás de la alerta #142");
-    else send(s);
+    send(s);
   };
 
   return (
@@ -1800,6 +1932,11 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
           ref={scrollRef}
           style={{ flex: 1, overflowY: "auto", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 9 }}
         >
+          {messages.length === 0 && (
+            <div className="msg-bot">
+              <p>{CHAT_INTRO}</p>
+            </div>
+          )}
           {messages.map((m, i) => {
             if (m.role === "user") {
               return (
@@ -1872,7 +2009,7 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
             }
             return (
               <div key={i} className="msg-bot">
-                {m.text}
+                <MarkdownMessage text={m.text} />
               </div>
             );
           })}
@@ -1961,7 +2098,7 @@ export default function HomePage() {
   };
 
   const { data: stats, live: statsLive } = useAsync(fetchStats, FALLBACK_STATS);
-  const { data: metrics } = useAsync(fetchMetrics, FALLBACK_METRICS);
+  const { data: apiMetrics } = useAsync(fetchMetrics, FALLBACK_METRICS);
   const { data: alertsResp } = useAsync(
     () => fetchAlerts({ limit: 100 }),
     { items: FALLBACK_ALERTS, total: FALLBACK_ALERTS.length, limit: 100, offset: 0 },
@@ -1973,6 +2110,7 @@ export default function HomePage() {
   }, [alertsResp]);
 
   const activeCount = alerts.filter((a) => a.estado === "nueva" || a.estado === "en_curso").length;
+  const metrics = useMemo(() => deriveMetricsFromAlerts(alerts, apiMetrics), [alerts, apiMetrics]);
 
   return (
     <div data-screen-label="Pulse 2 · Alert Center">
