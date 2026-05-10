@@ -98,10 +98,10 @@ const FALLBACK_ALERTS: AlertItem[] = [
 ];
 
 const SUBFAMILY_NAME: Record<string, string> = {
-  C1: "Anestésicos",
+  C1: "Anestesia",
   C2: "Bioseguridad",
-  T1: "Restauración",
-  T2: "Cirugía",
+  T1: "Biomateriales T1",
+  T2: "Biomateriales T2",
 };
 
 const SIGNAL_TREND = [

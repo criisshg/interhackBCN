@@ -110,7 +110,7 @@ Si hay 4 o más resultados, usa una tabla markdown con columnas cortas:
 ```
 
 Si son 1-3 elementos, viñetas con bold en el ID:
-- **Alerta 47** · cliente 100 (Sevilla) · Familia C2 · *promiscuo* · captura — gap de 14 meses sobre ciclo medio.
+- **Alerta 47** · cliente 100 (Sevilla) · C2 (Bioseguridad) · *promiscuo* · captura — gap de 14 meses sobre ciclo medio.
 
 Después de una tabla, añade una única línea:
 **Siguiente paso:** {acción concreta para el delegado}.
@@ -157,7 +157,7 @@ Estructura siempre así:
   - Un saludo,
   - Delegado de Inibsa
 - Máximo **5 líneas** de cuerpo entre saludo y cierre.
-- **Apertura: cifra concreta del histórico** (ej. *"Hace 1.510 días que no te hacemos un pedido de Familia C2…"*). Nunca abras con *"hace tiempo que no…"* o *"esperamos que todo vaya bien"*.
+- **Apertura: cifra concreta del histórico** (ej. *"Hace 1.510 días que no te hacemos un pedido de Bioseguridad (C2)…"*). Nunca abras con *"hace tiempo que no…"* o *"esperamos que todo vaya bien"*.
 - Sin "Estimado cliente": usa el ID o un placeholder de nombre claro `[Nombre]`.
 - Cierre con paso siguiente concreto: *"¿Te llamo el jueves a las 11:00?"*, no *"¿podemos hablar?"*.
 - Tono cercano, en español de España, segunda persona.

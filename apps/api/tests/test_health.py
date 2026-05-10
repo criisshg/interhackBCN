@@ -35,9 +35,9 @@ def seed_data() -> None:
         session.add(
             Product(
                 product_id="A1",
-                analytical_block="Commodities",
-                category="Categoria C1",
-                subfamily="Familia C1",
+                analytical_block="commodity",
+                category="C1",
+                subfamily="C1",
             )
         )
         session.add(
@@ -55,7 +55,7 @@ def seed_data() -> None:
                 id=10,
                 fecha=datetime(2026, 5, 9, 10, 0, 0),
                 client_id=1,
-                subfamilia="Categoria C1",
+                subfamilia="C1",
                 tipo_dinamica="commodity",
                 tipologia_cliente="promiscuous",
                 motivo="Gap relevante y ventana de captura abierta.",
@@ -73,7 +73,7 @@ def seed_data() -> None:
                 id=11,
                 fecha=datetime(2026, 5, 9, 11, 0, 0),
                 client_id=2,
-                subfamilia="Categoria T1",
+                subfamilia="T1",
                 tipo_dinamica="technical",
                 tipologia_cliente="at_risk",
                 motivo="Deterioro sostenido.",
