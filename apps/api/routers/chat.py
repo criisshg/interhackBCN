@@ -66,6 +66,8 @@ def chat(payload: ChatIn) -> dict:
     )
 
     last_draft: dict[str, Any] | None = None
+    charts: list[dict[str, Any]] = []
+    text_chunks: list[str] = []
 
     # Loop de tool-use: si Gemini pide una tool, la ejecutamos y devolvemos el resultado.
     for _ in range(8):  # max 8 iteraciones para evitar bucles infinitos
@@ -73,12 +75,18 @@ def chat(payload: ChatIn) -> dict:
             model=MODEL, contents=contents, config=config
         )
 
+        if response.text:
+            text_chunks.append(response.text)
+
         function_calls = response.function_calls or []
         if not function_calls:
-            text = _clean_response(response.text or "")
             if last_draft and last_draft.get("suggested_email"):
-                text = _clean_response(str(last_draft["suggested_email"]))
-            return {"role": "assistant", "content": text}
+                content = str(last_draft["suggested_email"])
+            else:
+                content = "\n\n".join(text_chunks).strip()
+            if not content and charts:
+                content = f"Aquí tienes la gráfica: **{charts[0].get('title', 'visualización')}**."
+            return {"role": "assistant", "content": _clean_response(content), "charts": charts}
 
         # Añadir la respuesta del modelo (con function_call) a la conversación
         candidates = response.candidates or []
@@ -97,6 +105,10 @@ def chat(payload: ChatIn) -> dict:
                     result = fn(**(call.args or {}))
                     if name == "draft_outreach":
                         last_draft = result
+                    if name == "make_chart" and isinstance(result, dict) and result.get("ok"):
+                        chart_spec = result.get("chart")
+                        if isinstance(chart_spec, dict):
+                            charts.append(chart_spec)
                 except NotImplementedError:
                     result = {"error": f"tool {name} not yet implemented"}
                 except Exception as e:  # noqa: BLE001 — surface to model

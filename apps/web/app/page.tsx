@@ -33,6 +33,7 @@ import {
   Label,
   Legend,
   Line,
+  LineChart,
   Pie,
   PieChart,
   ReferenceArea,
@@ -48,6 +49,7 @@ import {
   AlertItem,
   ActionResultado,
   ChatMessage,
+  ChartSpec,
   Metrics,
   Stats,
   fetchAlerts,
@@ -1682,7 +1684,8 @@ type ChatBubble =
   | { role: "user"; text: string }
   | { role: "bot"; kind: "plain"; text: string }
   | { role: "bot"; kind: "table"; intro: string; rows: string[][]; foot: string }
-  | { role: "bot"; kind: "email"; subject: string; body: string[] };
+  | { role: "bot"; kind: "email"; subject: string; body: string[] }
+  | { role: "bot"; kind: "chart"; spec: ChartSpec };
 
 const CHAT_INTRO =
   "Estoy conectado a las alertas reales. Pregúntame por prioridades, provincias, clientes o borradores comerciales.";
@@ -1808,6 +1811,49 @@ function MarkdownMessage({ text }: { text: string }) {
   return <>{nodes}</>;
 }
 
+const CHART_PALETTE = ["#1F6FEB", "#C0432F", "#E0A23A", "#2FB48A", "#6321D7", "#666"];
+
+function ChartBubble({ spec }: { spec: ChartSpec }) {
+  const { chart_type, data, x_key, y_key, title, caption } = spec;
+  return (
+    <div className="msg-bot" style={{ padding: 12, width: "90%" }}>
+      <div style={{ fontWeight: 700, marginBottom: 8, color: "var(--pulse-blue-deep)" }}>{title}</div>
+      <ResponsiveContainer width="100%" height={200}>
+        {chart_type === "line" ? (
+          <LineChart data={data} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+            <XAxis dataKey={x_key} tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip wrapperStyle={{ fontSize: 12 }} />
+            <Line type="monotone" dataKey={y_key} stroke={CHART_PALETTE[0]} strokeWidth={2} dot={{ r: 3 }} />
+          </LineChart>
+        ) : chart_type === "bar" ? (
+          <BarChart data={data} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+            <XAxis dataKey={x_key} tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey={y_key} fill={CHART_PALETTE[0]} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        ) : (
+          <PieChart>
+            <Tooltip wrapperStyle={{ fontSize: 12 }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Pie data={data} dataKey={y_key} nameKey={x_key} outerRadius={70} label={{ fontSize: 10 }}>
+              {data.map((_, idx) => (
+                <Cell key={idx} fill={CHART_PALETTE[idx % CHART_PALETTE.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        )}
+      </ResponsiveContainer>
+      {caption && (
+        <div style={{ marginTop: 6, fontSize: 11.5, fontStyle: "italic", opacity: 0.7 }}>{caption}</div>
+      )}
+    </div>
+  );
+}
+
 function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatBubble[]>([]);
   const [draft, setDraft] = useState("");
@@ -1855,7 +1901,12 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
       .then((r) => {
         setTyping(false);
         const reply: ChatBubble = { role: "bot", kind: "plain", text: r.content };
-        setMessages((m) => [...m, reply]);
+        const chartBubbles: ChatBubble[] = (r.charts ?? []).map((spec) => ({
+          role: "bot" as const,
+          kind: "chart" as const,
+          spec,
+        }));
+        setMessages((m) => [...m, reply, ...chartBubbles]);
         if (voice && r.content) void playVoice(r.content);
       })
       .catch(() => {
@@ -2006,6 +2057,9 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
                   </div>
                 </div>
               );
+            }
+            if (m.kind === "chart") {
+              return <ChartBubble key={i} spec={m.spec} />;
             }
             return (
               <div key={i} className="msg-bot">

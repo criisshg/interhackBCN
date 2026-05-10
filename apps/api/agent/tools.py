@@ -119,6 +119,36 @@ TOOL_DECLARATIONS = [
             "required": ["client_id", "intent"],
         },
     },
+    {
+        "name": "make_chart",
+        "description": (
+            "Emite una gráfica para acompañar la respuesta. Úsala cuando la pregunta tiene "
+            "componente temporal (evolución), distributiva (proporciones por categoría) o "
+            "ranking (top-N por valor). Los datos DEBEN venir de una tool previa "
+            "(get_alerts/get_client/explain_alert) — nunca los inventes. Tras llamarla, sigue "
+            "dando la respuesta de texto interpretándola brevemente (1-2 frases)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "chart_type": {
+                    "type": "string",
+                    "enum": ["line", "bar", "pie"],
+                    "description": "line=evolución temporal, bar=ranking/top-N, pie=distribución.",
+                },
+                "data": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Filas con shape uniforme: [{x_key: ..., y_key: ...}, ...].",
+                },
+                "x_key": {"type": "string", "description": "Clave del eje X (line/bar) o name (pie)."},
+                "y_key": {"type": "string", "description": "Clave del eje Y (line/bar) o value (pie)."},
+                "title": {"type": "string"},
+                "caption": {"type": "string", "description": "Texto opcional debajo de la gráfica (1 línea)."},
+            },
+            "required": ["chart_type", "data", "x_key", "y_key", "title"],
+        },
+    },
 ]
 
 
@@ -291,9 +321,39 @@ def draft_outreach(client_id: int, intent: str) -> dict[str, Any]:
     }
 
 
+def make_chart(
+    chart_type: str,
+    data: list[dict[str, Any]],
+    x_key: str,
+    y_key: str,
+    title: str,
+    caption: str | None = None,
+) -> dict[str, Any]:
+    """Empaqueta una spec de gráfica para que chat.py la pase al frontend. No consulta nada."""
+    if chart_type not in {"line", "bar", "pie"}:
+        return {"error": f"chart_type must be one of line/bar/pie, got '{chart_type}'"}
+    if not isinstance(data, list) or not data:
+        return {"error": "data must be a non-empty list of objects"}
+    first = data[0]
+    if not isinstance(first, dict) or x_key not in first or y_key not in first:
+        return {"error": f"each row must contain keys '{x_key}' and '{y_key}'", "first_row": first}
+
+    spec: dict[str, Any] = {
+        "chart_type": chart_type,
+        "data": data,
+        "x_key": x_key,
+        "y_key": y_key,
+        "title": title,
+    }
+    if caption:
+        spec["caption"] = caption
+    return {"ok": True, "chart": spec}
+
+
 TOOL_FUNCTIONS = {
     "get_alerts": get_alerts,
     "get_client": get_client,
     "explain_alert": explain_alert,
     "draft_outreach": draft_outreach,
+    "make_chart": make_chart,
 }

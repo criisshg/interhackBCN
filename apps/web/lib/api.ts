@@ -42,6 +42,17 @@ export type Metrics = {
 
 export type ChatMessage = { role: "user" | "model"; content: string };
 
+export type ChartSpec = {
+  chart_type: "line" | "bar" | "pie";
+  data: Array<Record<string, number | string>>;
+  x_key: string;
+  y_key: string;
+  title: string;
+  caption?: string;
+};
+
+export type ChatResponse = { role: string; content: string; charts?: ChartSpec[] };
+
 async function getJson<T>(path: string): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, { cache: "no-store" });
   if (!r.ok) throw new Error(`API ${r.status}`);
@@ -85,7 +96,7 @@ export async function postChat(messages: ChatMessage[]) {
     body: JSON.stringify({ messages }),
   });
   if (!r.ok) throw new Error(`API ${r.status}`);
-  return r.json() as Promise<{ role: string; content: string }>;
+  return r.json() as Promise<ChatResponse>;
 }
 
 export type ActionResultado = "convertida" | "desestimada" | "en_curso" | "expirada";
