@@ -54,12 +54,6 @@ def _clean_response(text: str) -> str:
     return cleaned.strip()
 
 
-def _should_use_suggested_email(text: str) -> bool:
-    lower = text.lower()
-    weak_phrases = ["hace tiempo", "esperamos que todo vaya bien", "estimado cliente"]
-    return any(phrase in lower for phrase in weak_phrases) or not lower.startswith(("**asunto:**", "asunto:"))
-
-
 @router.post("")
 def chat(payload: ChatIn) -> dict:
     client = _client()
@@ -82,7 +76,7 @@ def chat(payload: ChatIn) -> dict:
         function_calls = response.function_calls or []
         if not function_calls:
             text = _clean_response(response.text or "")
-            if last_draft and last_draft.get("suggested_email") and _should_use_suggested_email(text):
+            if last_draft and last_draft.get("suggested_email"):
                 text = _clean_response(str(last_draft["suggested_email"]))
             return {"role": "assistant", "content": text}
 
