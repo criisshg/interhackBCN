@@ -1,7 +1,205 @@
 {
-  "_comment": "Extra opcional E2. P5 monta esto en n8n cloud si sobra tiempo en F2.",
-  "_purpose": "Cron diario → POST /run-recalc → consultar top alertas por delegación → email/Slack",
-  "name": "Pulse · Daily recalc and dispatch",
-  "nodes": [],
-  "connections": {}
+  "name": "Pulse - Daily recalc and dispatch",
+  "nodes": [
+    {
+      "id": "cron-1",
+      "name": "Cron diario 07:00 L-V",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [200, 480],
+      "notes": "Dispara cada dia laborable a las 07:00. Ajusta la expresion cron si cambia el horario.",
+      "notesInFlow": true,
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 7 * * 1-5" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "http-recalc",
+      "name": "Recalcular senales (POST /run-recalc)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [420, 480],
+      "notes": "Regenera todas las alertas (motor analitico). Render free tier puede tardar ~30-50s en cold start: timeout 90s. Reintenta 2 veces. onError -> rama de fallo.",
+      "notesInFlow": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL }}/run-recalc",
+        "options": { "timeout": 90000 }
+      }
+    },
+    {
+      "id": "if-ok",
+      "name": "Recalculo OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [660, 480],
+      "notes": "Comprueba ok === true. Si no, salta al aviso de fallo al admin y para.",
+      "notesInFlow": true,
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "loose", "version": 2, "leftValue": "" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "gmail-fail",
+      "name": "Aviso fallo al admin",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [900, 660],
+      "notes": "Email de error. Recibe input del IF (rama false) y del error output del HTTP /run-recalc. Tras esto el workflow para.",
+      "notesInFlow": true,
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $env.EMAIL_ADMIN || 'cambiar-admin@example.com' }}",
+        "subject": "=[Pulse] FALLO en el recalculo diario",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;\"><h2 style=\"color:#b00020;\">Pulse &middot; Fallo en el recalculo diario</h2><p>El POST a <code>/run-recalc</code> no se completo correctamente. El workflow se ha detenido y NO se han enviado digests a los equipos.</p><ul><li>Timestamp: {{ $now.toISO() }}</li><li>Error: {{ $json.error || $json.message || 'Error HTTP / respuesta no valida' }}</li><li>Segundos transcurridos: {{ $json.elapsed_seconds || 'n/d' }}</li><li>Alertas generadas: {{ $json.alerts_generated || 0 }}</li><li>API_BASE_URL: {{ $env.API_BASE_URL }}</li></ul><p>Revisa el backend de Pulse.</p><hr style=\"border:none;border-top:1px solid #ddd;margin:16px 0;\"><p style=\"font-size:11px;color:#888;\">La actividad de competencia no se observa directamente; se infiere del gap entre potencial declarado y compras Inibsa.</p></div>",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-alerts",
+      "name": "Recoger alertas (GET /alerts)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [900, 380],
+      "notes": "Top 100 alertas activas ordenadas por prioridad_score desc. Reintenta 2 veces.",
+      "notesInFlow": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_BASE_URL }}/alerts?limit=100",
+        "options": { "timeout": 60000 }
+      }
+    },
+    {
+      "id": "code-group",
+      "name": "Agrupar por canal + HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 280],
+      "notes": "Agrupa las alertas por canal_recomendado, toma top 10 por canal, traduce tipologia y genera la tabla HTML. Devuelve 1 item por canal con alertas (campos: canal, html, subject...).",
+      "notesInFlow": true,
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const resp = $('Recoger alertas (GET /alerts)').first().json;\nconst items = Array.isArray(resp) ? resp : (resp.items || []);\n\nconst TIPOLOGIA = { loyal: 'leal', promiscuous: 'promiscuo', at_risk: 'en riesgo de fuga', marginal: 'marginal' };\nconst CHANNEL_LABEL = { rep: 'Delegados comerciales', telesales: 'Televenta', marketing: 'Marketing', sin_canal: 'Sin canal asignado' };\nconst fmtInt = (n) => Math.round(Number(n) || 0).toLocaleString('de-DE');\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst byChannel = {};\nfor (const a of items) { const ch = a.canal_recomendado || 'sin_canal'; (byChannel[ch] = byChannel[ch] || []).push(a); }\n\nconst out = [];\nfor (const [ch, list] of Object.entries(byChannel)) {\n  const top = list.slice(0, 10);\n  const rows = top.map(a => '<tr>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;\">' + esc(a.id) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;\">' + esc(a.client_id) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;\">' + esc(a.provincia || a.province) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;\">' + esc(a.subfamilia) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;\">' + esc(TIPOLOGIA[a.tipologia_cliente] || a.tipologia_cliente) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;\">' + esc(a.motivo) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;text-align:right;\">' + esc(a.urgencia_dias) + '</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;text-align:right;\">' + fmtInt(a.impacto_estimado) + ' &euro;</td>' +\n    '<td style=\"border:1px solid #ccc;padding:6px;text-align:right;\">' + fmtInt(a.prioridad_score) + '</td>' +\n    '</tr>').join('');\n  const totalImpact = list.reduce((s, a) => s + (Number(a.impacto_estimado) || 0), 0);\n  const html = '<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;\">' +\n    '<h2 style=\"color:#1a4d8f;margin-bottom:4px;\">Pulse &middot; Alertas prioritarias &mdash; ' + (CHANNEL_LABEL[ch] || ch) + '</h2>' +\n    '<p>' + list.length + ' alerta(s) activa(s) para tu canal. Pipeline estimado del canal: <strong>' + fmtInt(totalImpact) + ' &euro;</strong>. Mostrando las ' + top.length + ' de mayor prioridad:</p>' +\n    '<table style=\"border-collapse:collapse;width:100%;font-size:13px;\"><thead><tr style=\"background:#1a4d8f;color:#fff;\">' +\n    '<th style=\"border:1px solid #ccc;padding:6px;\">ID alerta</th><th style=\"border:1px solid #ccc;padding:6px;\">Cliente</th><th style=\"border:1px solid #ccc;padding:6px;\">Provincia</th><th style=\"border:1px solid #ccc;padding:6px;\">Subfamilia</th><th style=\"border:1px solid #ccc;padding:6px;\">Tipologia</th><th style=\"border:1px solid #ccc;padding:6px;\">Motivo</th><th style=\"border:1px solid #ccc;padding:6px;\">Urgencia (dias)</th><th style=\"border:1px solid #ccc;padding:6px;\">Impacto est.</th><th style=\"border:1px solid #ccc;padding:6px;\">Prioridad</th>' +\n    '</tr></thead><tbody>' + rows + '</tbody></table>' +\n    '<p style=\"margin-top:16px;\">Estas son tus alertas prioritarias de hoy. Cada contacto realizado se registra en Pulse.</p>' +\n    '<hr style=\"border:none;border-top:1px solid #ddd;margin:16px 0;\"><p style=\"font-size:11px;color:#888;\">La actividad de competencia no se observa directamente; se infiere del gap entre potencial declarado y compras Inibsa.</p></div>';\n  out.push({ json: { canal: ch, canal_label: CHANNEL_LABEL[ch] || ch, count: list.length, shown: top.length, pipeline_canal_eur: Math.round(totalImpact), subject: 'Pulse - ' + top.length + ' alertas prioritarias (' + (CHANNEL_LABEL[ch] || ch) + ')', html } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "gmail-digest",
+      "name": "Digest por canal",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1380, 280],
+      "notes": "Envia un email HTML a cada equipo. Destinatario por canal via env: EMAIL_REP / EMAIL_TELESALES / EMAIL_MARKETING (fallback EMAIL_ADMIN). Se ejecuta 1 vez por canal con alertas.",
+      "notesInFlow": true,
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ ({rep: $env.EMAIL_REP, telesales: $env.EMAIL_TELESALES, marketing: $env.EMAIL_MARKETING})[$json.canal] || $env.EMAIL_ADMIN || 'cambiar-destinatario@example.com' }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-stats",
+      "name": "Consultar stats (GET /stats)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1140, 480],
+      "notes": "Agregados globales (active_alerts, pipeline_eur, urgent_alerts, by_tipologia, by_tipo) para el email resumen al admin.",
+      "notesInFlow": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_BASE_URL }}/stats",
+        "options": { "timeout": 60000 }
+      }
+    },
+    {
+      "id": "code-admin",
+      "name": "Resumen admin + HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 480],
+      "notes": "Compone el HTML del resumen al admin con totales de /stats, /run-recalc y conteo por canal de las alertas recogidas.",
+      "notesInFlow": true,
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "const stats = $('Consultar stats (GET /stats)').first().json || {};\nconst recalc = $('Recalcular senales (POST /run-recalc)').first().json || {};\nconst alertsResp = $('Recoger alertas (GET /alerts)').first().json || {};\nconst items = Array.isArray(alertsResp) ? alertsResp : (alertsResp.items || []);\n\nconst fmtInt = (n) => Math.round(Number(n) || 0).toLocaleString('de-DE');\nconst TR = { loyal: 'leal', promiscuous: 'promiscuo', at_risk: 'en riesgo de fuga', marginal: 'marginal' };\n\nconst byChannel = {};\nfor (const a of items) { const c = a.canal_recomendado || 'sin_canal'; byChannel[c] = (byChannel[c] || 0) + 1; }\nconst channelRows = Object.entries(byChannel).map(([c, n]) => '<tr><td style=\"border:1px solid #ccc;padding:6px;\">' + c + '</td><td style=\"border:1px solid #ccc;padding:6px;text-align:right;\">' + n + '</td></tr>').join('');\nconst tipoRows = Object.entries(stats.by_tipologia || {}).map(([k, v]) => '<tr><td style=\"border:1px solid #ccc;padding:6px;\">' + (TR[k] || k) + '</td><td style=\"border:1px solid #ccc;padding:6px;text-align:right;\">' + v + '</td></tr>').join('');\n\nconst html = '<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;\">' +\n  '<h2 style=\"color:#1a4d8f;\">Pulse &middot; Resumen diario de activacion</h2>' +\n  '<p>Recalculo ejecutado correctamente en ' + (recalc.elapsed_seconds != null ? recalc.elapsed_seconds : 'n/d') + 's. <strong>' + fmtInt(recalc.alerts_generated) + '</strong> alertas generadas.</p>' +\n  '<ul><li>Alertas activas: <strong>' + fmtInt(stats.active_alerts) + '</strong></li><li>Alertas urgentes: <strong>' + fmtInt(stats.urgent_alerts) + '</strong></li><li>Pipeline estimado total: <strong>' + fmtInt(stats.pipeline_eur) + ' &euro;</strong></li></ul>' +\n  '<h3>Alertas por canal (entre las top ' + items.length + ' recogidas)</h3><table style=\"border-collapse:collapse;font-size:13px;\"><thead><tr style=\"background:#1a4d8f;color:#fff;\"><th style=\"border:1px solid #ccc;padding:6px;\">Canal</th><th style=\"border:1px solid #ccc;padding:6px;\">N</th></tr></thead><tbody>' + channelRows + '</tbody></table>' +\n  '<h3>Alertas por tipologia (global)</h3><table style=\"border-collapse:collapse;font-size:13px;\"><thead><tr style=\"background:#1a4d8f;color:#fff;\"><th style=\"border:1px solid #ccc;padding:6px;\">Tipologia</th><th style=\"border:1px solid #ccc;padding:6px;\">N</th></tr></thead><tbody>' + tipoRows + '</tbody></table>' +\n  '<p style=\"margin-top:16px;\">Los digests por canal ya se han enviado a cada equipo. Cada contacto realizado se registra en Pulse.</p>' +\n  '<hr style=\"border:none;border-top:1px solid #ddd;margin:16px 0;\"><p style=\"font-size:11px;color:#888;\">La actividad de competencia no se observa directamente; se infiere del gap entre potencial declarado y compras Inibsa.</p></div>';\n\nreturn [{ json: { html, subject: 'Pulse - Resumen diario (' + fmtInt(stats.active_alerts) + ' alertas activas)', alerts_generated: recalc.alerts_generated, active_alerts: stats.active_alerts, pipeline_eur: stats.pipeline_eur } }];"
+      }
+    },
+    {
+      "id": "gmail-admin",
+      "name": "Resumen al admin",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1620, 480],
+      "notes": "Email final con totales. Destinatario via env EMAIL_ADMIN.",
+      "notesInFlow": true,
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $env.EMAIL_ADMIN || 'cambiar-admin@example.com' }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Cron diario 07:00 L-V": { "main": [[{ "node": "Recalcular senales (POST /run-recalc)", "type": "main", "index": 0 }]] },
+    "Recalcular senales (POST /run-recalc)": {
+      "main": [
+        [{ "node": "Recalculo OK?", "type": "main", "index": 0 }],
+        [{ "node": "Aviso fallo al admin", "type": "main", "index": 0 }]
+      ]
+    },
+    "Recalculo OK?": {
+      "main": [
+        [{ "node": "Recoger alertas (GET /alerts)", "type": "main", "index": 0 }],
+        [{ "node": "Aviso fallo al admin", "type": "main", "index": 0 }]
+      ]
+    },
+    "Recoger alertas (GET /alerts)": {
+      "main": [[
+        { "node": "Agrupar por canal + HTML", "type": "main", "index": 0 },
+        { "node": "Consultar stats (GET /stats)", "type": "main", "index": 0 }
+      ]]
+    },
+    "Agrupar por canal + HTML": { "main": [[{ "node": "Digest por canal", "type": "main", "index": 0 }]] },
+    "Consultar stats (GET /stats)": { "main": [[{ "node": "Resumen admin + HTML", "type": "main", "index": 0 }]] },
+    "Resumen admin + HTML": { "main": [[{ "node": "Resumen al admin", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "meta": {}
 }
