@@ -88,6 +88,25 @@ export async function postChat(messages: ChatMessage[]) {
   return r.json() as Promise<{ role: string; content: string }>;
 }
 
+export type ActionResultado = "convertida" | "desestimada" | "en_curso" | "expirada";
+
+export type ActionPayload = {
+  alert_id: number;
+  ejecutado_por: string;
+  resultado: ActionResultado;
+  comentario?: string;
+};
+
+export async function postAction(payload: ActionPayload) {
+  const r = await fetch(`${API_URL}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error(`API ${r.status}`);
+  return r.json() as Promise<{ ok: boolean; id: number; alert_id: number; estado: string }>;
+}
+
 export async function speak(text: string): Promise<Blob> {
   const r = await fetch(`${API_URL}/voice`, {
     method: "POST",

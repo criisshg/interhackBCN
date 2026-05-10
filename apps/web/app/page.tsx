@@ -2,24 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
-  ArrowRight,
-  Calendar as CalendarIcon,
+  BarChart3,
   CheckCircle,
   ChevronDown,
   Clock,
-  Database,
+  Euro,
+  Gauge as GaugeIcon,
+  Inbox,
   MessageCircle,
   Mic,
-  Package,
+  Phone,
   Radio,
+  RefreshCw,
   Search,
   Send,
   ShieldCheck,
   Sparkles,
   Target,
-  Users,
+  TrendingDown,
   X,
 } from "lucide-react";
 import {
@@ -29,28 +30,35 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Label,
   Legend,
   Line,
   Pie,
   PieChart,
+  ReferenceArea,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
+  ZAxis,
 } from "recharts";
 import {
   AlertItem,
+  ActionResultado,
   ChatMessage,
   Metrics,
   Stats,
   fetchAlerts,
   fetchMetrics,
   fetchStats,
+  postAction,
   postChat,
   speak,
 } from "@/lib/api";
 
-/* ---------------- Static fallbacks (from the prototype) ---------------- */
+/* ---------------- Static fallbacks ---------------- */
 
 const FALLBACK_STATS: Stats = {
   active_alerts: 127,
@@ -69,209 +77,68 @@ const FALLBACK_METRICS: Metrics = {
 };
 
 const FALLBACK_ALERTS: AlertItem[] = [
-  {
-    id: 142,
-    fecha: "2026-05-09",
-    client_id: 4821,
-    province: "Barcelona",
-    region_code: "08",
-    subfamilia: "C1",
-    tipo_dinamica: "commodity",
-    tipologia_cliente: "at_risk",
-    motivo: "Buying 3 months below historical average.",
-    urgencia_dias: 3,
-    prioridad_score: 9.2,
-    impacto_estimado: 4800,
-    canal_recomendado: "rep",
-    gestor_responsable: "auto",
-    plazo_dias: 3,
-    estado: "nueva",
-  },
-  {
-    id: 138,
-    fecha: "2026-05-09",
-    client_id: 3302,
-    province: "Madrid",
-    region_code: "28",
-    subfamilia: "T1",
-    tipo_dinamica: "technical",
-    tipologia_cliente: "loyal",
-    motivo: "Stockout imminent. Buys every 28 days, 26 elapsed.",
-    urgencia_dias: 2,
-    prioridad_score: 8.8,
-    impacto_estimado: 12400,
-    canal_recomendado: "rep",
-    gestor_responsable: "auto",
-    plazo_dias: 2,
-    estado: "nueva",
-  },
-  {
-    id: 155,
-    fecha: "2026-05-09",
-    client_id: 6104,
-    province: "Valencia",
-    region_code: "46",
-    subfamilia: "C2",
-    tipo_dinamica: "commodity",
-    tipologia_cliente: "promiscuous",
-    motivo: "Cycle broken. 47 days since last order (avg 31).",
-    urgencia_dias: 6,
-    prioridad_score: 8.1,
-    impacto_estimado: 2100,
-    canal_recomendado: "telesales",
-    gestor_responsable: "auto",
-    plazo_dias: 6,
-    estado: "nueva",
-  },
-  {
-    id: 121,
-    fecha: "2026-05-09",
-    client_id: 2891,
-    province: "Seville",
-    region_code: "41",
-    subfamilia: "T2",
-    tipo_dinamica: "technical",
-    tipologia_cliente: "at_risk",
-    motivo: "Sustained decline: 3m below baseline (avg €1,840 → €420).",
-    urgencia_dias: 8,
-    prioridad_score: 7.9,
-    impacto_estimado: 8600,
-    canal_recomendado: "rep",
-    gestor_responsable: "auto",
-    plazo_dias: 8,
-    estado: "en_curso",
-  },
-  {
-    id: 163,
-    fecha: "2026-05-09",
-    client_id: 7733,
-    province: "Barcelona",
-    region_code: "08",
-    subfamilia: "C1",
-    tipo_dinamica: "commodity",
-    tipologia_cliente: "promiscuous",
-    motivo: "52 days since last purchase (avg 34 days).",
-    urgencia_dias: 11,
-    prioridad_score: 7.4,
-    impacto_estimado: 1900,
-    canal_recomendado: "marketing",
-    gestor_responsable: "auto",
-    plazo_dias: 11,
-    estado: "nueva",
-  },
-  {
-    id: 109,
-    fecha: "2026-05-09",
-    client_id: 1540,
-    province: "Bilbao",
-    region_code: "48",
-    subfamilia: "T1",
-    tipo_dinamica: "technical",
-    tipologia_cliente: "loyal",
-    motivo: "Restock expected. 21-day cycle, 19 elapsed.",
-    urgencia_dias: 2,
-    prioridad_score: 7.1,
-    impacto_estimado: 9200,
-    canal_recomendado: "rep",
-    gestor_responsable: "auto",
-    plazo_dias: 2,
-    estado: "nueva",
-  },
-  {
-    id: 177,
-    fecha: "2026-05-09",
-    client_id: 5512,
-    province: "Madrid",
-    region_code: "28",
-    subfamilia: "C2",
-    tipo_dinamica: "commodity",
-    tipologia_cliente: "marginal",
-    motivo: "No activity for 68 days. Annual potential €3,200.",
-    urgencia_dias: 14,
-    prioridad_score: 5.3,
-    impacto_estimado: 3200,
-    canal_recomendado: "marketing",
-    gestor_responsable: "auto",
-    plazo_dias: 14,
-    estado: "nueva",
-  },
-  {
-    id: 99,
-    fecha: "2026-05-09",
-    client_id: 3018,
-    province: "Zaragoza",
-    region_code: "50",
-    subfamilia: "T2",
-    tipo_dinamica: "technical",
-    tipologia_cliente: "promiscuous",
-    motivo: "Sustained drop: 6m avg €2,100 → last 3m avg €580.",
-    urgencia_dias: 9,
-    prioridad_score: 6.8,
-    impacto_estimado: 5400,
-    canal_recomendado: "telesales",
-    gestor_responsable: "auto",
-    plazo_dias: 9,
-    estado: "en_curso",
-  },
+  { id: 142, fecha: "2026-05-09", client_id: 4821, province: "Barcelona", region_code: "CAT", subfamilia: "C1", tipo_dinamica: "commodity", tipologia_cliente: "at_risk",     motivo: "Compra 3 meses por debajo de su media histórica. Caída sostenida del 47% en anestésicos dentales.", urgencia_dias: 3,  prioridad_score: 9.2, impacto_estimado: 4800,  canal_recomendado: "rep",       gestor_responsable: "Laura Vega",  plazo_dias: 7,  estado: "nueva" },
+  { id: 138, fecha: "2026-05-09", client_id: 3302, province: "Madrid",    region_code: "MAD", subfamilia: "T1", tipo_dinamica: "technical", tipologia_cliente: "loyal",       motivo: "Rotura de stock inminente. Compra cada 28 días, ya han pasado 26 sin reposición.",                  urgencia_dias: 2,  prioridad_score: 8.8, impacto_estimado: 12400, canal_recomendado: "rep",       gestor_responsable: "Carlos Ruiz", plazo_dias: 5,  estado: "nueva" },
+  { id: 155, fecha: "2026-05-09", client_id: 6104, province: "Valencia",  region_code: "VAL", subfamilia: "C2", tipo_dinamica: "commodity", tipologia_cliente: "promiscuous", motivo: "Ciclo roto. 47 días desde la última compra, su media es de 31. Probable pedido a competencia.",     urgencia_dias: 6,  prioridad_score: 8.1, impacto_estimado: 2100,  canal_recomendado: "telesales", gestor_responsable: "Equipo TLV",  plazo_dias: 7,  estado: "nueva" },
+  { id: 121, fecha: "2026-05-08", client_id: 2891, province: "Sevilla",   region_code: "AND", subfamilia: "T2", tipo_dinamica: "technical", tipologia_cliente: "at_risk",     motivo: "Caída sostenida: 3 meses por debajo del baseline (€1.840 → €420 de media mensual).",                urgencia_dias: 8,  prioridad_score: 7.9, impacto_estimado: 8600,  canal_recomendado: "rep",       gestor_responsable: "Laura Vega",  plazo_dias: 14, estado: "en_curso" },
+  { id: 163, fecha: "2026-05-09", client_id: 7733, province: "Barcelona", region_code: "CAT", subfamilia: "C1", tipo_dinamica: "commodity", tipologia_cliente: "promiscuous", motivo: "52 días desde última compra (media 34d). Cliente promiscuo, ventana de captura abierta.",            urgencia_dias: 11, prioridad_score: 7.4, impacto_estimado: 1900,  canal_recomendado: "marketing", gestor_responsable: "MKT auto.",   plazo_dias: 14, estado: "nueva" },
+  { id: 109, fecha: "2026-05-09", client_id: 1540, province: "Bilbao",    region_code: "PVA", subfamilia: "T1", tipo_dinamica: "technical", tipologia_cliente: "loyal",       motivo: "Reposición esperada: ciclo de 21 días, 19 transcurridos. Cliente fiel con cadencia muy estable.",     urgencia_dias: 2,  prioridad_score: 7.1, impacto_estimado: 9200,  canal_recomendado: "rep",       gestor_responsable: "Pablo Mora",  plazo_dias: 5,  estado: "nueva" },
+  { id: 99,  fecha: "2026-05-08", client_id: 3018, province: "Zaragoza",  region_code: "ARA", subfamilia: "T2", tipo_dinamica: "technical", tipologia_cliente: "promiscuous", motivo: "Caída sostenida: media 6m €2.100 → últimos 3m €580. Probable shift a competidor técnico.",          urgencia_dias: 9,  prioridad_score: 6.8, impacto_estimado: 5400,  canal_recomendado: "telesales", gestor_responsable: "Equipo TLV",  plazo_dias: 10, estado: "en_curso" },
+  { id: 177, fecha: "2026-05-08", client_id: 5512, province: "Madrid",    region_code: "MAD", subfamilia: "C2", tipo_dinamica: "commodity", tipologia_cliente: "marginal",    motivo: "68 días sin actividad. Potencial anual estimado €3.200 según clínicas similares.",                  urgencia_dias: 14, prioridad_score: 5.3, impacto_estimado: 3200,  canal_recomendado: "marketing", gestor_responsable: "MKT auto.",   plazo_dias: 21, estado: "nueva" },
+  { id: 184, fecha: "2026-05-08", client_id: 8821, province: "Málaga",    region_code: "AND", subfamilia: "C1", tipo_dinamica: "commodity", tipologia_cliente: "loyal",       motivo: "Pico estacional detectado. Cliente fiel, ventana de cross-sell con productos T1 abierta.",          urgencia_dias: 5,  prioridad_score: 6.5, impacto_estimado: 3400,  canal_recomendado: "rep",       gestor_responsable: "Ana Costa",   plazo_dias: 7,  estado: "nueva" },
+  { id: 172, fecha: "2026-05-07", client_id: 4290, province: "Valencia",  region_code: "VAL", subfamilia: "T1", tipo_dinamica: "technical", tipologia_cliente: "at_risk",     motivo: "Frecuencia rota: pasó de pedido mensual a trimestral. Perdimos cuota frente a un competidor técnico.", urgencia_dias: 7,  prioridad_score: 7.6, impacto_estimado: 6700,  canal_recomendado: "rep",       gestor_responsable: "Mar García",  plazo_dias: 10, estado: "nueva" },
+  { id: 151, fecha: "2026-05-07", client_id: 9930, province: "Madrid",    region_code: "MAD", subfamilia: "C1", tipo_dinamica: "commodity", tipologia_cliente: "loyal",       motivo: "Compra cada 35 días, hoy 33 transcurridos. Reposición prevista esta semana.",                       urgencia_dias: 4,  prioridad_score: 6.2, impacto_estimado: 2200,  canal_recomendado: "rep",       gestor_responsable: "Carlos Ruiz", plazo_dias: 7,  estado: "nueva" },
+  { id: 118, fecha: "2026-05-06", client_id: 1102, province: "Bilbao",    region_code: "PVA", subfamilia: "T2", tipo_dinamica: "technical", tipologia_cliente: "promiscuous", motivo: "43 días desde última compra (media 30d). Patrón compatible con prueba de proveedor alternativo.",   urgencia_dias: 12, prioridad_score: 5.9, impacto_estimado: 4100,  canal_recomendado: "telesales", gestor_responsable: "Equipo TLV",  plazo_dias: 14, estado: "nueva" },
+  { id: 87,  fecha: "2026-05-05", client_id: 7710, province: "Barcelona", region_code: "CAT", subfamilia: "T1", tipo_dinamica: "technical", tipologia_cliente: "loyal",       motivo: "Repuesto recurrente con margen alto. Cadencia 14 días, 12 transcurridos.",                          urgencia_dias: 3,  prioridad_score: 6.7, impacto_estimado: 5100,  canal_recomendado: "rep",       gestor_responsable: "Laura Vega",  plazo_dias: 5,  estado: "convertida" },
+  { id: 73,  fecha: "2026-05-04", client_id: 6602, province: "Sevilla",   region_code: "AND", subfamilia: "C2", tipo_dinamica: "commodity", tipologia_cliente: "marginal",    motivo: "Cliente reactivado tras 90 días inactivo. Tres pedidos en 30d, validar si patrón se sostiene.",       urgencia_dias: 18, prioridad_score: 4.8, impacto_estimado: 980,   canal_recomendado: "marketing", gestor_responsable: "MKT auto.",   plazo_dias: 21, estado: "convertida" },
+  { id: 65,  fecha: "2026-05-03", client_id: 4408, province: "Madrid",    region_code: "MAD", subfamilia: "C1", tipo_dinamica: "commodity", tipologia_cliente: "promiscuous", motivo: "Falsa alarma: la caída se debió a vacaciones. Stock confirmado por delegado.",                      urgencia_dias: 21, prioridad_score: 3.9, impacto_estimado: 1500,  canal_recomendado: "rep",       gestor_responsable: "Carlos Ruiz", plazo_dias: 14, estado: "desestimada" },
+  { id: 58,  fecha: "2026-04-28", client_id: 2255, province: "Granada",   region_code: "AND", subfamilia: "T2", tipo_dinamica: "technical", tipologia_cliente: "at_risk",     motivo: "Plazo de gestión vencido sin contacto. Pasa a expirada.",                                            urgencia_dias: 30, prioridad_score: 3.2, impacto_estimado: 2900,  canal_recomendado: "rep",       gestor_responsable: "Pablo Mora",  plazo_dias: 14, estado: "expirada" },
+  { id: 201, fecha: "2026-05-09", client_id: 3340, province: "Murcia",    region_code: "MUR", subfamilia: "T1", tipo_dinamica: "technical", tipologia_cliente: "promiscuous", motivo: "Patrón irregular reciente: dos compras pequeñas tras 60d de silencio. Probable test de Inibsa.",      urgencia_dias: 9,  prioridad_score: 5.7, impacto_estimado: 2400,  canal_recomendado: "telesales", gestor_responsable: "Equipo TLV",  plazo_dias: 14, estado: "nueva" },
+  { id: 212, fecha: "2026-05-09", client_id: 7080, province: "Madrid",    region_code: "MAD", subfamilia: "T2", tipo_dinamica: "technical", tipologia_cliente: "loyal",       motivo: "Cliente top-10 nacional. Pico de cirugías estacional, riesgo de rotura en próxima semana.",          urgencia_dias: 4,  prioridad_score: 8.4, impacto_estimado: 14800, canal_recomendado: "rep",       gestor_responsable: "Mar García",  plazo_dias: 7,  estado: "nueva" },
 ];
 
-const FAMILIES = [
-  { name: "C1", sales: 76828, ticket: 438, type: "commodity" as const },
-  { name: "T1", sales: 44158, ticket: 1090, type: "technical" as const },
-  { name: "C2", sales: 22528, ticket: 458, type: "commodity" as const },
-  { name: "T2", sales: 19032, ticket: 909, type: "technical" as const },
-];
+const SUBFAMILY_NAME: Record<string, string> = {
+  C1: "Anestésicos",
+  C2: "Bioseguridad",
+  T1: "Restauración",
+  T2: "Cirugía",
+};
 
 const SIGNAL_TREND = [
   { m: "Jun '24", alerts: 88, converted: 22, fp: 19 },
   { m: "Jul '24", alerts: 96, converted: 28, fp: 21 },
-  { m: "Aug '24", alerts: 92, converted: 26, fp: 22 },
+  { m: "Ago '24", alerts: 92, converted: 26, fp: 22 },
   { m: "Sep '24", alerts: 104, converted: 31, fp: 23 },
   { m: "Oct '24", alerts: 110, converted: 33, fp: 22 },
   { m: "Nov '24", alerts: 117, converted: 37, fp: 24 },
-  { m: "Dec '24", alerts: 109, converted: 35, fp: 21 },
-  { m: "Jan '25", alerts: 121, converted: 39, fp: 22 },
+  { m: "Dic '24", alerts: 109, converted: 35, fp: 21 },
+  { m: "Ene '25", alerts: 121, converted: 39, fp: 22 },
   { m: "Feb '25", alerts: 124, converted: 41, fp: 21 },
   { m: "Mar '25", alerts: 119, converted: 39, fp: 19 },
-  { m: "Apr '25", alerts: 130, converted: 44, fp: 20 },
+  { m: "Abr '25", alerts: 130, converted: 44, fp: 20 },
   { m: "May '25", alerts: 127, converted: 42, fp: 18 },
 ];
 
-const PROV_BREAKDOWN = [
-  { p: "Madrid", alerts: 34, pipeline: 78400 },
-  { p: "Barcelona", alerts: 29, pipeline: 64200 },
-  { p: "Valencia", alerts: 18, pipeline: 38900 },
-  { p: "Seville", alerts: 14, pipeline: 31200 },
-  { p: "Bilbao", alerts: 11, pipeline: 24800 },
-  { p: "Zaragoza", alerts: 9, pipeline: 19600 },
+const TIPOLOGIA_DIST = [
+  { key: "loyal" as const, label: "Loyal", color: "#16a34a", micro: "cadencia estable" },
+  { key: "promiscuous" as const, label: "Promiscuous", color: "#f59e0b", micro: "ventana de captura" },
+  { key: "at_risk" as const, label: "At risk", color: "#E05540", micro: "deterioro sostenido" },
+  { key: "marginal" as const, label: "Marginal", color: "#94a3b8", micro: "actividad residual" },
 ];
 
-const SUBFAMILY_NAME: Record<string, string> = {
-  C1: "Anesthetics",
-  C2: "Biosafety",
-  T1: "Restoratives",
-  T2: "Surgery",
-};
+const ALERT_BY_TYPE = [
+  { key: "DECLINE", label: "Deterioro sostenido", count: 47, color: "#E05540", desc: "Caída sostenida vs. baseline propio" },
+  { key: "CAPTURE", label: "Captura", count: 83, color: "#f59e0b", desc: "Demanda probable no capturada por Inibsa" },
+  { key: "REORDER", label: "Reposición", count: 31, color: "#16a34a", desc: "Próxima compra esperada de cliente fiel" },
+];
 
-type TipologiaKey = "loyal" | "promiscuous" | "at_risk" | "marginal";
+type TipologiaKey = (typeof TIPOLOGIA_DIST)[number]["key"];
 
-const TIP_META: Record<TipologiaKey, { label: string; fg: string; bg: string; micro: string; color: string }> = {
-  loyal: { label: "Loyal", fg: "#15803d", bg: "#E8F6EE", micro: "steady cadence", color: "#16a34a" },
-  promiscuous: {
-    label: "Promiscuous",
-    fg: "#B7791F",
-    bg: "#FEF6E1",
-    micro: "capture gap",
-    color: "#f59e0b",
-  },
-  at_risk: { label: "At risk", fg: "#C0432F", bg: "#FCE9E5", micro: "sustained decline", color: "#E05540" },
-  marginal: {
-    label: "Marginal",
-    fg: "#5d6d7c",
-    bg: "#EEF2F5",
-    micro: "residual activity",
-    color: "#94a3b8",
-  },
+const TIP_META: Record<TipologiaKey, { label: string; fg: string; bg: string }> = {
+  loyal: { label: "Loyal", fg: "#15803d", bg: "#E8F6EE" },
+  promiscuous: { label: "Promiscuous", fg: "#B7791F", bg: "#FEF6E1" },
+  at_risk: { label: "At risk", fg: "#C0432F", bg: "#FCE9E5" },
+  marginal: { label: "Marginal", fg: "#5d6d7c", bg: "#EEF2F5" },
 };
 
 const TIPO_META: Record<"commodity" | "technical", { label: string; fg: string; bg: string }> = {
@@ -279,27 +146,26 @@ const TIPO_META: Record<"commodity" | "technical", { label: string; fg: string; 
   technical: { label: "Technical", fg: "#6321d7", bg: "#F1ECFE" },
 };
 
-const CHANNEL_META: Record<"rep" | "telesales" | "marketing", { label: string; fg: string; bg: string }> = {
-  rep: { label: "Rep", fg: "#174761", bg: "#dceaf3" },
-  telesales: { label: "Telesales", fg: "#6321d7", bg: "#F1ECFE" },
-  marketing: { label: "Marketing", fg: "#15803d", bg: "#E8F6EE" },
+const STATE_META: Record<AlertItem["estado"], { label: string; fg: string; bg: string; color: string }> = {
+  nueva: { label: "Nueva", fg: "#2C7FB8", bg: "#E8F4FB", color: "#45A0D5" },
+  en_curso: { label: "En curso", fg: "#B7791F", bg: "#FEF6E1", color: "#f59e0b" },
+  convertida: { label: "Convertida", fg: "#15803d", bg: "#E8F6EE", color: "#16a34a" },
+  desestimada: { label: "Desestimada", fg: "#C0432F", bg: "#FCE9E5", color: "#E05540" },
+  expirada: { label: "Expirada", fg: "#5d6d7c", bg: "#EEF2F5", color: "#94a3b8" },
 };
 
-const STATE_META: Record<AlertItem["estado"], { label: string; fg: string; bg: string }> = {
-  nueva: { label: "New", fg: "#2C7FB8", bg: "#E8F4FB" },
-  en_curso: { label: "In progress", fg: "#B7791F", bg: "#FEF6E1" },
-  convertida: { label: "Converted", fg: "#15803d", bg: "#E8F6EE" },
-  desestimada: { label: "Dismissed", fg: "#C0432F", bg: "#FCE9E5" },
-  expirada: { label: "Expired", fg: "#5d6d7c", bg: "#EEF2F5" },
+const CHANNEL_META: Record<"rep" | "telesales" | "marketing", { label: string; fg: string; bg: string; color: string }> = {
+  rep: { label: "Delegado", fg: "#174761", bg: "#dceaf3", color: "#174761" },
+  telesales: { label: "Televenta", fg: "#6321d7", bg: "#F1ECFE", color: "#7C3AED" },
+  marketing: { label: "Marketing auto.", fg: "#15803d", bg: "#E8F6EE", color: "#16a34a" },
 };
 
-const fmtEUR = (n: number) => "€" + Math.round(n).toLocaleString("en-US");
-const fmtNum = (n: number) => n.toLocaleString("en-US");
-const fmtPct = (n: number, digits = 0) => (n * 100).toFixed(digits) + "%";
+const fmtEUR = (n: number) => "€" + Math.round(n).toLocaleString("es-ES");
+const fmtPct = (n: number, digits = 0) => (n * 100).toFixed(digits).replace(".", ",") + "%";
 
 /* ---------------- Hooks ---------------- */
 
-function useAsync<T>(loader: () => Promise<T>, fallback: T, deps: unknown[] = []) {
+function useAsync<T>(loader: () => Promise<T>, fallback: T) {
   const [data, setData] = useState<T>(fallback);
   const [live, setLive] = useState(false);
   useEffect(() => {
@@ -318,15 +184,38 @@ function useAsync<T>(loader: () => Promise<T>, fallback: T, deps: unknown[] = []
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, []);
   return { data, live };
+}
+
+/* ---------------- Inibsa logo ---------------- */
+
+function InibsaLogo({ size = 38 }: { size?: number }) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 10, lineHeight: 1 }}>
+      <svg width={size} height={size} viewBox="0 0 40 40" aria-label="Inibsa">
+        <path d="M 20 4 A 16 16 0 1 1 4.6 24" fill="none" stroke="#E05540" strokeWidth="4.6" strokeLinecap="round" />
+        <path d="M 20 13 A 7 7 0 1 1 14 24" fill="none" stroke="#E05540" strokeWidth="4.6" strokeLinecap="round" />
+      </svg>
+      <span
+        style={{
+          fontWeight: 800,
+          fontSize: 26,
+          color: "#45A0D5",
+          letterSpacing: "-0.02em",
+        }}
+      >
+        inibsa
+      </span>
+    </div>
+  );
 }
 
 /* ---------------- Primitives ---------------- */
 
-function Badge({ fg, bg, children }: { fg: string; bg: string; children: React.ReactNode }) {
+function Badge({ fg, bg, children, uc = false }: { fg: string; bg: string; children: React.ReactNode; uc?: boolean }) {
   return (
-    <span className="badge" style={{ color: fg, background: bg }}>
+    <span className={uc ? "badge uc" : "badge"} style={{ color: fg, background: bg }}>
       {children}
     </span>
   );
@@ -340,6 +229,12 @@ function UrgencyPip({ d }: { d: number }) {
     </span>
   );
 }
+
+const LegendDot = ({ color, label }: { color: string; label: string }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <span className="dot" style={{ background: color, width: 9, height: 9 }} /> {label}
+  </span>
+);
 
 type SelectOption = { v: string; l: string };
 
@@ -414,533 +309,1020 @@ function SelectMenu({
   );
 }
 
-/* ---------------- Charts (Dashboard) ---------------- */
-
-function TipologiaDonut({
-  stats,
-  active,
-  setActive,
-}: {
-  stats: Stats;
-  active: TipologiaKey | null;
-  setActive: (k: TipologiaKey | null) => void;
-}) {
-  const total = (stats.by_tipologia.loyal ?? 0)
-    + (stats.by_tipologia.promiscuous ?? 0)
-    + (stats.by_tipologia.at_risk ?? 0)
-    + (stats.by_tipologia.marginal ?? 0);
-  const safe = total > 0 ? total : 1;
-  const dist = (Object.keys(TIP_META) as TipologiaKey[]).map((key) => {
-    const value = stats.by_tipologia[key] ?? 0;
-    return {
-      key,
-      label: TIP_META[key].label,
-      value: Math.round((value / safe) * 100),
-      color: TIP_META[key].color,
-      micro: TIP_META[key].micro,
-    };
-  });
-
+function StateChip({ label, n, color }: { label: string; n: number; color: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ position: "relative", width: 170, height: 170, flexShrink: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={dist}
-              dataKey="value"
-              innerRadius={56}
-              outerRadius={80}
-              paddingAngle={2}
-              stroke="none"
-              onClick={(_, i) => setActive(active === dist[i].key ? null : dist[i].key)}
-            >
-              {dist.map((t, i) => (
-                <Cell
-                  key={i}
-                  fill={t.color}
-                  opacity={active === null || active === t.key ? 1 : 0.25}
-                  cursor="pointer"
-                />
-              ))}
-            </Pie>
-            <Tooltip formatter={(v: number, _n, p: { payload?: { label: string } }) => [v + "%", p.payload?.label ?? ""]} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              letterSpacing: "-.02em",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {fmtNum(total || 8095)}
-          </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "var(--text-muted)",
-              textTransform: "uppercase",
-              letterSpacing: ".09em",
-              fontWeight: 600,
-            }}
-          >
-            clients
-          </div>
-        </div>
-      </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-        {dist.map((t) => (
-          <div
-            key={t.key}
-            onClick={() => setActive(active === t.key ? null : t.key)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "5px 7px",
-              borderRadius: 5,
-              cursor: "pointer",
-              background: active === t.key ? "#f4f9fc" : "transparent",
-              opacity: active === null || active === t.key ? 1 : 0.45,
-              transition: "opacity .15s, background .15s",
-            }}
-          >
-            <span className="dot" style={{ background: t.color, width: 8, height: 8 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.2 }}>{t.label}</div>
-              <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>{t.micro}</div>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{t.value}%</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 9px",
+        borderRadius: 4,
+        background: "#fff",
+        border: "1px solid var(--border)",
+        fontSize: 11.5,
+        color: "var(--text)",
+      }}
+    >
+      <span className="dot" style={{ background: color, width: 7, height: 7 }} />
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <strong style={{ fontVariantNumeric: "tabular-nums" }}>{n}</strong>
+    </span>
   );
 }
 
-function FamilyChart() {
-  const data = FAMILIES.map((f) => ({ ...f, salesK: +(f.sales / 1000).toFixed(1) }));
-  return (
-    <div>
-      <ResponsiveContainer width="100%" height={210}>
-        <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -12 }}>
-          <CartesianGrid strokeDasharray="2 4" stroke="#e6eef4" vertical={false} />
-          <XAxis
-            dataKey="name"
-            tick={{ fill: "#5a7a8a", fontSize: 11, fontWeight: 600 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            yAxisId="left"
-            tick={{ fill: "#8aa6b6", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => v + "k"}
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            tick={{ fill: "#8aa6b6", fontSize: 10 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => "€" + v}
-          />
-          <Tooltip
-            cursor={{ fill: "rgba(69,160,213,.06)" }}
-            formatter={(v: number, n: string) =>
-              n === "salesK" ? [fmtNum(Math.round(v * 1000)), "Sales"] : [fmtEUR(v), "Avg ticket"]
-            }
-            labelFormatter={(l) => "Family " + l}
-          />
-          <Bar yAxisId="left" dataKey="salesK" radius={[4, 4, 0, 0]} barSize={18} name="Sales">
-            {data.map((d, i) => (
-              <Cell key={i} fill={d.type === "technical" ? "var(--technical)" : "var(--commodity)"} />
-            ))}
-          </Bar>
-          <Bar
-            yAxisId="right"
-            dataKey="ticket"
-            radius={[4, 4, 0, 0]}
-            barSize={18}
-            name="Avg ticket €"
-            fill="#174761"
-            fillOpacity={0.85}
-          />
-          <Legend wrapperStyle={{ display: "none" }} />
-        </BarChart>
-      </ResponsiveContainer>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: 6,
-          paddingLeft: 18,
-          paddingRight: 6,
-          fontSize: 10,
-          color: "var(--text-faint)",
-          fontWeight: 600,
-          letterSpacing: ".05em",
-        }}
-      >
-        <span style={{ color: "var(--commodity)" }}>C1 · COMMODITY</span>
-        <span style={{ color: "var(--technical)" }}>T1 · TECHNICAL</span>
-        <span style={{ color: "var(--commodity)" }}>C2 · COMMODITY</span>
-        <span style={{ color: "var(--technical)" }}>T2 · TECHNICAL</span>
-      </div>
-      <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span className="dot" style={{ background: "var(--commodity)", width: 8, height: 8, borderRadius: 2 }} />
-          Commodity
-        </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span className="dot" style={{ background: "var(--technical)", width: 8, height: 8, borderRadius: 2 }} />
-          Technical
-        </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span className="dot" style={{ background: "var(--pulse-blue-deep)", width: 8, height: 8, borderRadius: 2 }} />
-          Avg ticket
-        </span>
-      </div>
-    </div>
-  );
-}
+/* ---------------- Tab 1 · Alert Center ---------------- */
 
-function AlertsByType({ alerts }: { alerts: AlertItem[] }) {
-  const sources = useMemo(() => {
-    const decline = alerts.filter((a) => a.tipologia_cliente === "at_risk").length;
-    const capture = alerts.filter((a) => a.tipologia_cliente === "promiscuous" || a.tipologia_cliente === "marginal").length;
-    const reorder = alerts.filter((a) => a.tipologia_cliente === "loyal").length;
-    return [
-      {
-        key: "DECLINE",
-        label: "Sustained decline",
-        count: Math.max(decline, 47),
-        color: "#E05540",
-        desc: "Sustained drop vs. own baseline",
-      },
-      {
-        key: "CAPTURE",
-        label: "Capture",
-        count: Math.max(capture, 83),
-        color: "#f59e0b",
-        desc: "Likely demand not captured by Inibsa",
-      },
-      {
-        key: "REORDER",
-        label: "Reorder",
-        count: Math.max(reorder, 31),
-        color: "#16a34a",
-        desc: "Next purchase expected from a loyal client",
-      },
-    ];
-  }, [alerts]);
-  const total = sources.reduce((s, a) => s + a.count, 0);
-  const max = Math.max(...sources.map((a) => a.count));
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 13, marginTop: 4 }}>
-      {sources.map((a) => {
-        const pct = ((a.count / total) * 100).toFixed(0);
-        return (
-          <div key={a.key} title={a.desc} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{a.label}</span>
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    color: "var(--text-faint)",
-                    fontFamily: "ui-monospace, Menlo, monospace",
-                    letterSpacing: ".05em",
-                  }}
-                >
-                  {a.key}
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontVariantNumeric: "tabular-nums" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: a.color }}>{a.count}</span>
-                <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{pct}%</span>
-              </div>
-            </div>
-            <div style={{ height: 8, background: "#F1F6FA", borderRadius: 4, overflow: "hidden" }}>
-              <div
-                style={{
-                  height: "100%",
-                  width: `${(a.count / max) * 100}%`,
-                  background: a.color,
-                  borderRadius: 4,
-                  transition: "width .8s cubic-bezier(.2,.7,.2,1)",
-                }}
-              />
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>{a.desc}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+type ToastFn = (msg: string, kind?: "info" | "success" | "error") => void;
 
-/* ---------------- Alerts table ---------------- */
-
-function AlertsTable({
+function AlertCenter({
   alerts,
-  total,
-  tipologiaFromDonut,
+  setAlerts,
+  stats,
+  metrics,
+  onToast,
 }: {
   alerts: AlertItem[];
-  total: number;
-  tipologiaFromDonut: TipologiaKey | null;
+  setAlerts: React.Dispatch<React.SetStateAction<AlertItem[]>>;
+  stats: Stats;
+  metrics: Metrics;
+  onToast: ToastFn;
 }) {
   const [tipoFilter, setTipoFilter] = useState("all");
   const [tipologiaFilter, setTipologiaFilter] = useState("all");
-  const [provincia, setProvincia] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("activos");
+  const [search, setSearch] = useState("");
+  const [pendingIds, setPendingIds] = useState<Set<number>>(() => new Set());
 
-  useEffect(() => {
-    if (tipologiaFromDonut) setTipologiaFilter(tipologiaFromDonut);
-  }, [tipologiaFromDonut]);
-
-  const rows = alerts
-    .filter(
-      (r) =>
-        (tipoFilter === "all" || r.tipo_dinamica === tipoFilter) &&
-        (tipologiaFilter === "all" || r.tipologia_cliente === tipologiaFilter) &&
-        (provincia === "" || (r.province ?? "").toLowerCase().includes(provincia.toLowerCase())),
-    )
-    .sort((a, b) => b.prioridad_score - a.prioridad_score);
+  const rows = useMemo(() => {
+    return alerts
+      .filter((r) => {
+        if (tipoFilter !== "all" && r.tipo_dinamica !== tipoFilter) return false;
+        if (tipologiaFilter !== "all" && r.tipologia_cliente !== tipologiaFilter) return false;
+        if (estadoFilter === "activos" && !(r.estado === "nueva" || r.estado === "en_curso")) return false;
+        if (
+          estadoFilter === "resueltos" &&
+          !(r.estado === "convertida" || r.estado === "desestimada" || r.estado === "expirada")
+        )
+          return false;
+        if (
+          estadoFilter !== "all" &&
+          estadoFilter !== "activos" &&
+          estadoFilter !== "resueltos" &&
+          r.estado !== estadoFilter
+        )
+          return false;
+        if (search) {
+          const q = search.toLowerCase();
+          const subName = (SUBFAMILY_NAME[r.subfamilia] ?? r.subfamilia).toLowerCase();
+          if (
+            !(
+              (r.province ?? "").toLowerCase().includes(q) ||
+              String(r.client_id).includes(search) ||
+              subName.includes(q) ||
+              r.motivo.toLowerCase().includes(q)
+            )
+          )
+            return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.prioridad_score - a.prioridad_score);
+  }, [alerts, tipoFilter, tipologiaFilter, estadoFilter, search]);
 
   const prioColor = (d: number) => (d <= 7 ? "var(--pulse-coral)" : d <= 14 ? "#f59e0b" : "#16a34a");
 
+  async function handleAction(alertId: number, resultado: ActionResultado) {
+    const previous = alerts.find((a) => a.id === alertId);
+    if (!previous) return;
+    setPendingIds((s) => {
+      const n = new Set(s);
+      n.add(alertId);
+      return n;
+    });
+    setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, estado: resultado } : a)));
+    try {
+      await postAction({
+        alert_id: alertId,
+        ejecutado_por: "demo_user",
+        resultado,
+        comentario: "Marcado desde Alert Center",
+      });
+      const labels: Record<ActionResultado, string> = {
+        convertida: "convertida",
+        desestimada: "descartada",
+        en_curso: "marcada en curso",
+        expirada: "expirada",
+      };
+      onToast(`Alerta #${alertId} ${labels[resultado]}`, "success");
+    } catch {
+      setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, estado: previous.estado } : a)));
+      onToast(`No se pudo registrar la acción en #${alertId}`, "error");
+    } finally {
+      setPendingIds((s) => {
+        const n = new Set(s);
+        n.delete(alertId);
+        return n;
+      });
+    }
+  }
+
+  const counts = useMemo(() => {
+    const c: Record<AlertItem["estado"], number> = {
+      nueva: 0,
+      en_curso: 0,
+      convertida: 0,
+      desestimada: 0,
+      expirada: 0,
+    };
+    alerts.forEach((a) => {
+      c[a.estado] = (c[a.estado] || 0) + 1;
+    });
+    return c;
+  }, [alerts]);
+
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+    <div className="tab-view">
+      {/* KPI cockpit */}
+      <div className="section-head" style={{ justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="section-title">Cockpit comercial</span>
+          <span className="badge-soft" style={{ background: "var(--pulse-blue-soft)", color: "var(--pulse-blue-deep)" }}>
+            ● LIVE
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-faint)" }}>Pipeline · riesgo · win-rate · cobertura</div>
+      </div>
+      <div className="stat-grid-4" style={{ marginBottom: 18 }}>
+        <div className="card kpi">
+          <div className="accent-bar" style={{ background: "var(--pulse-blue)" }} />
+          <div className="kpi-icon">
+            <Euro size={15} />
+          </div>
+          <div className="kpi-lbl">Pipeline pendiente</div>
+          <div className="kpi-num">{fmtEUR(stats.pipeline_eur)}</div>
+          <div className="kpi-sub">impacto estimado activo</div>
+          <div className="signal-track" style={{ marginTop: 10 }}>
+            <span style={{ width: "58%", background: "var(--pulse-blue)" }} />
+          </div>
+        </div>
+        <div className="card kpi">
+          <div className="accent-bar" style={{ background: "var(--pulse-coral)" }} />
+          <div className="kpi-icon" style={{ background: "var(--pulse-coral-bg)", color: "var(--pulse-coral-deep)" }}>
+            <TrendingDown size={15} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <div className="kpi-lbl">Críticas at-risk</div>
+            <span className="badge uc" style={{ color: "#fff", background: "var(--pulse-coral)", fontSize: 9 }}>
+              RIESGO
+            </span>
+          </div>
+          <div className="kpi-num">{stats.by_tipologia.at_risk ?? 0}</div>
+          <div className="kpi-sub">clientes con deterioro</div>
+          <div className="signal-track" style={{ marginTop: 10 }}>
+            <span style={{ width: "42%", background: "var(--pulse-coral)" }} />
+          </div>
+        </div>
+        <div className="card kpi">
+          <div className="accent-bar" style={{ background: "#16a34a" }} />
+          <div className="kpi-icon" style={{ background: "var(--loyal-bg)", color: "#15803d" }}>
+            <Target size={15} />
+          </div>
+          <div className="kpi-lbl">Win-rate</div>
+          <div className="kpi-num">{fmtPct(metrics.conversion_rate)}</div>
+          <div className="kpi-sub">convertidas / cerradas</div>
+          <div className="signal-track" style={{ marginTop: 10 }}>
+            <span style={{ width: `${metrics.conversion_rate * 100}%`, background: "#16a34a" }} />
+          </div>
+        </div>
+        <div className="card kpi">
+          <div className="accent-bar" style={{ background: "var(--pulse-blue-deep)" }} />
+          <div className="kpi-icon" style={{ background: "#dceaf3", color: "var(--pulse-blue-deep)" }}>
+            <GaugeIcon size={15} />
+          </div>
+          <div className="kpi-lbl">Cobertura &lt;48h</div>
+          <div className="kpi-num">{fmtPct(metrics.coverage_rate)}</div>
+          <div className="kpi-sub">acciones registradas en plazo</div>
+          <div className="signal-track" style={{ marginTop: 10 }}>
+            <span style={{ width: `${metrics.coverage_rate * 100}%`, background: "var(--pulse-blue-deep)" }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Quick state strip */}
       <div
+        className="card"
         style={{
-          padding: "14px 18px",
-          borderBottom: "1px solid var(--border)",
+          padding: "10px 14px",
+          marginBottom: 12,
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
           gap: 14,
           flexWrap: "wrap",
         }}
       >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Prioritized alerts</h3>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minWidth: 24,
-                padding: "2px 8px",
-                borderRadius: 4,
-                background: "var(--pulse-coral-bg)",
-                color: "var(--pulse-coral-deep)",
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: ".05em",
-              }}
-            >
-              {total} ACTIVE
-            </span>
-          </div>
-          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
-            Sorted by priority, urgency and estimated impact
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Inbox size={15} style={{ color: "var(--pulse-blue-strong)" }} />
+          <span style={{ fontSize: 13, color: "var(--pulse-blue-deep)", fontWeight: 700 }}>Cola comercial</span>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <SelectMenu
-            label="Type"
-            value={tipoFilter}
-            options={[
-              { v: "all", l: "All" },
-              { v: "commodity", l: "Commodity" },
-              { v: "technical", l: "Technical" },
-            ]}
-            onChange={setTipoFilter}
-            width={140}
-          />
-          <SelectMenu
-            label="Segment"
-            value={tipologiaFilter}
-            options={[
-              { v: "all", l: "All" },
-              { v: "loyal", l: "Loyal" },
-              { v: "promiscuous", l: "Promiscuous" },
-              { v: "at_risk", l: "At risk" },
-              { v: "marginal", l: "Marginal" },
-            ]}
-            onChange={setTipologiaFilter}
-            width={160}
-          />
-          <div style={{ position: "relative" }}>
-            <Search
-              size={13}
-              style={{
-                position: "absolute",
-                left: 9,
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "var(--text-faint)",
-              }}
-            />
-            <input
-              className="input"
-              style={{ paddingLeft: 28, width: 140 }}
-              placeholder="Province"
-              value={provincia}
-              onChange={(e) => setProvincia(e.target.value)}
-            />
-          </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <StateChip label="Nueva" n={counts.nueva} color="#45A0D5" />
+          <StateChip label="En curso" n={counts.en_curso} color="#f59e0b" />
+          <StateChip label="Convertida" n={counts.convertida} color="#16a34a" />
+          <StateChip label="Desestimada" n={counts.desestimada} color="#E05540" />
+          <StateChip label="Expirada" n={counts.expirada} color="#94a3b8" />
+        </div>
+        <div
+          style={{
+            marginLeft: "auto",
+            fontSize: 11,
+            color: "var(--text-faint)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span className="live-dot" />
+          Última sincronización 09:14
         </div>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table className="alerts">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Client</th>
-              <th>Province</th>
-              <th>Subfamily</th>
-              <th>Type</th>
-              <th>Segment</th>
-              <th>Urgency</th>
-              <th style={{ textAlign: "right" }}>Impact €</th>
-              <th>Channel</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const tip = TIP_META[r.tipologia_cliente];
-              const tipo = TIPO_META[r.tipo_dinamica];
-              const est = STATE_META[r.estado];
-              const can = CHANNEL_META[r.canal_recomendado];
-              const subName = SUBFAMILY_NAME[r.subfamilia] ?? r.subfamilia;
-              return (
-                <tr key={r.id} style={{ ["--prio" as never]: prioColor(r.urgencia_dias) }}>
-                  <td
-                    style={{
-                      fontFamily: "ui-monospace, Menlo, monospace",
-                      color: "var(--pulse-blue-deep)",
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    #{r.id}
-                  </td>
-                  <td>
-                    <div
+
+      {/* TABLE */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div
+          style={{
+            padding: "14px 18px",
+            borderBottom: "1px solid var(--border)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 14,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>¿A quién llamar hoy?</h3>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 24,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  background: "var(--pulse-coral-bg)",
+                  color: "var(--pulse-coral-deep)",
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: ".05em",
+                }}
+              >
+                {rows.length} EN COLA
+              </span>
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+              Ordenadas por prioridad, urgencia e impacto estimado · A quién, qué venderle, por qué motivo
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <SelectMenu
+              label="Estado"
+              value={estadoFilter}
+              options={[
+                { v: "activos", l: "Activas" },
+                { v: "all", l: "Todas" },
+                { v: "nueva", l: "Nuevas" },
+                { v: "en_curso", l: "En curso" },
+                { v: "resueltos", l: "Resueltas" },
+              ]}
+              onChange={setEstadoFilter}
+              width={140}
+            />
+            <SelectMenu
+              label="Tipo"
+              value={tipoFilter}
+              options={[
+                { v: "all", l: "Todos" },
+                { v: "commodity", l: "Commodity" },
+                { v: "technical", l: "Technical" },
+              ]}
+              onChange={setTipoFilter}
+              width={140}
+            />
+            <SelectMenu
+              label="Segmento"
+              value={tipologiaFilter}
+              options={[
+                { v: "all", l: "Todos" },
+                { v: "loyal", l: "Loyal" },
+                { v: "promiscuous", l: "Promiscuous" },
+                { v: "at_risk", l: "At risk" },
+                { v: "marginal", l: "Marginal" },
+              ]}
+              onChange={setTipologiaFilter}
+              width={170}
+            />
+            <div style={{ position: "relative" }}>
+              <Search
+                size={13}
+                style={{
+                  position: "absolute",
+                  left: 9,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-faint)",
+                }}
+              />
+              <input
+                className="input"
+                style={{ paddingLeft: 28, width: 200 }}
+                placeholder="Cliente, motivo, provincia..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table className="alerts">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th>Provincia</th>
+                <th>Qué vender</th>
+                <th>Motivo</th>
+                <th>Urgencia</th>
+                <th style={{ textAlign: "right" }}>Impacto €</th>
+                <th>Canal</th>
+                <th>Estado</th>
+                <th style={{ textAlign: "right" }}>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const tip = TIP_META[r.tipologia_cliente];
+                const tipo = TIPO_META[r.tipo_dinamica];
+                const est = STATE_META[r.estado];
+                const can = CHANNEL_META[r.canal_recomendado];
+                const isPending = pendingIds.has(r.id);
+                const isResolved = r.estado === "convertida" || r.estado === "desestimada" || r.estado === "expirada";
+                const subName = SUBFAMILY_NAME[r.subfamilia] ?? r.subfamilia;
+                const cls = (isResolved ? "resolved " : "") + (isPending ? "pending" : "");
+                return (
+                  <tr key={r.id} className={cls.trim() || undefined} style={{ ["--prio" as never]: prioColor(r.urgencia_dias) }}>
+                    <td
                       style={{
+                        fontFamily: "ui-monospace, Menlo, monospace",
+                        color: "var(--pulse-blue-deep)",
+                        fontSize: 12,
                         fontWeight: 600,
-                        fontSize: 12.5,
-                        fontFamily: "ui-monospace, Menlo, monospace",
                       }}
                     >
-                      CL-{r.client_id}
-                    </div>
-                    <div
+                      #{r.id}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, fontSize: 12.5, fontFamily: "ui-monospace, Menlo, monospace" }}>
+                        CL-{r.client_id}
+                      </div>
+                      <div style={{ marginTop: 3 }}>
+                        <Badge fg={tip.fg} bg={tip.bg}>{tip.label}</Badge>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 12.5 }}>{r.province ?? "—"}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span
+                          style={{
+                            fontFamily: "ui-monospace, Menlo, monospace",
+                            fontSize: 11.5,
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          {r.subfamilia}
+                        </span>
+                        <span style={{ fontSize: 12.5, fontWeight: 500 }}>{subName}</span>
+                      </div>
+                      <div style={{ marginTop: 3 }}>
+                        <Badge fg={tipo.fg} bg={tipo.bg}>{tipo.label}</Badge>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="reason-cell">{r.motivo}</div>
+                    </td>
+                    <td>
+                      <UrgencyPip d={r.urgencia_dias} />
+                    </td>
+                    <td
                       style={{
-                        fontSize: 11,
-                        color: "var(--text-faint)",
-                        marginTop: 2,
-                        maxWidth: 240,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                      title={r.motivo}
-                    >
-                      {r.motivo}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 12.5 }}>{r.province ?? "—"}</td>
-                  <td>
-                    <span
-                      style={{
-                        fontFamily: "ui-monospace, Menlo, monospace",
-                        fontSize: 11.5,
-                        color: "var(--text-muted)",
-                        marginRight: 6,
+                        textAlign: "right",
+                        fontVariantNumeric: "tabular-nums",
+                        fontWeight: 700,
+                        fontSize: 13.5,
+                        color: "var(--pulse-blue-deep)",
                       }}
                     >
-                      {r.subfamilia}
-                    </span>
-                    <span style={{ fontSize: 12.5 }}>{subName}</span>
-                  </td>
-                  <td>
-                    <Badge fg={tipo.fg} bg={tipo.bg}>
-                      {tipo.label}
-                    </Badge>
-                  </td>
-                  <td>
-                    <Badge fg={tip.fg} bg={tip.bg}>
-                      {tip.label}
-                    </Badge>
-                  </td>
-                  <td>
-                    <UrgencyPip d={r.urgencia_dias} />
-                  </td>
-                  <td
-                    style={{
-                      textAlign: "right",
-                      fontVariantNumeric: "tabular-nums",
-                      fontWeight: 700,
-                      fontSize: 12.5,
-                    }}
-                  >
-                    {fmtEUR(r.impacto_estimado)}
-                  </td>
-                  <td>
-                    <Badge fg={can.fg} bg={can.bg}>
-                      {can.label}
-                    </Badge>
-                  </td>
-                  <td>
-                    <Badge fg={est.fg} bg={est.bg}>
-                      {est.label}
-                    </Badge>
-                  </td>
-                  <td>
-                    <span className="row-link">
-                      <ArrowRight size={13} />
-                    </span>
+                      {fmtEUR(r.impacto_estimado)}
+                    </td>
+                    <td>
+                      <Badge fg={can.fg} bg={can.bg}>{can.label}</Badge>
+                    </td>
+                    <td>
+                      <Badge fg={est.fg} bg={est.bg}>{est.label}</Badge>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {isPending ? (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 11,
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          <span className="row-spinner" /> Registrando…
+                        </span>
+                      ) : (
+                        <div style={{ display: "inline-flex", gap: 4, justifyContent: "flex-end" }}>
+                          <button
+                            className="action-btn success"
+                            disabled={isPending || r.estado === "convertida"}
+                            onClick={() => handleAction(r.id, "convertida")}
+                            title="Marcar como convertida"
+                          >
+                            <CheckCircle size={12} /> <span>Convertido</span>
+                          </button>
+                          <button
+                            className="action-btn progress"
+                            disabled={isPending || r.estado === "en_curso"}
+                            onClick={() => handleAction(r.id, "en_curso")}
+                            title="Marcar en curso"
+                          >
+                            <Phone size={12} />
+                          </button>
+                          <button
+                            className="action-btn danger"
+                            disabled={isPending || r.estado === "desestimada"}
+                            onClick={() => handleAction(r.id, "desestimada")}
+                            title="Descartar alerta"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                    No hay alertas con los filtros actuales.
                   </td>
                 </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={11} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                  No results match the current filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          style={{
+            padding: "10px 18px",
+            borderTop: "1px solid var(--border)",
+            background: "#FAFCFE",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8 }}>
+            <AlertTriangle size={11} style={{ color: "var(--amber-text)" }} />
+            <span>La actividad de competencia se infiere, no se observa directamente.</span>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", display: "flex", alignItems: "center", gap: 6 }}>
+            <RefreshCw size={11} />
+            POST /actions · estados sincronizados con backend
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ---------------- Metrics view ---------------- */
+/* ---------------- Tab 2 · Dashboard ---------------- */
 
-function Gauge({
+const SOW_BASE: Record<TipologiaKey, number> = {
+  loyal: 85,
+  promiscuous: 45,
+  at_risk: 65,
+  marginal: 10,
+};
+
+type ScatterDot = {
+  x: number;
+  y: number;
+  z: number;
+  client_id: number;
+  impacto: number;
+  urgencia: number;
+  tipo: TipologiaKey;
+  motivo: string;
+};
+
+function ScatterTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ScatterDot }> }) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0].payload;
+  const meta = TIP_META[d.tipo];
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid var(--border)",
+        borderRadius: 6,
+        padding: "8px 10px",
+        fontSize: 12,
+        boxShadow: "0 8px 24px rgba(20,50,80,.08)",
+        maxWidth: 280,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <span style={{ fontFamily: "ui-monospace, Menlo, monospace", fontWeight: 700, color: "var(--pulse-blue-deep)" }}>
+          CL-{d.client_id}
+        </span>
+        <span className="badge" style={{ color: meta.fg, background: meta.bg, fontSize: 9 }}>{meta.label}</span>
+      </div>
+      <div style={{ display: "flex", gap: 10, color: "var(--text-muted)", fontSize: 11.5, marginBottom: 5 }}>
+        <span>SoW <strong style={{ color: "var(--text)" }}>{d.x}%</strong></span>
+        <span>Urg. <strong style={{ color: "var(--text)" }}>{d.urgencia}d</strong></span>
+        <span>Imp. <strong style={{ color: "var(--text)" }}>{fmtEUR(d.impacto)}</strong></span>
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--text)", lineHeight: 1.4 }}>{d.motivo}</div>
+    </div>
+  );
+}
+
+function ScatterOpportunities({ alerts }: { alerts: AlertItem[] }) {
+  const data: ScatterDot[] = useMemo(
+    () =>
+      alerts.map((a) => {
+        const jitter = (a.id % 11) - 5;
+        const sow = Math.max(0, Math.min(100, SOW_BASE[a.tipologia_cliente] + jitter));
+        return {
+          x: sow,
+          y: a.urgencia_dias,
+          z: a.impacto_estimado,
+          client_id: a.client_id,
+          impacto: a.impacto_estimado,
+          urgencia: a.urgencia_dias,
+          tipo: a.tipologia_cliente,
+          motivo: a.motivo,
+        };
+      }),
+    [alerts],
+  );
+  const grouped = useMemo(
+    () => ({
+      loyal: data.filter((d) => d.tipo === "loyal"),
+      promiscuous: data.filter((d) => d.tipo === "promiscuous"),
+      at_risk: data.filter((d) => d.tipo === "at_risk"),
+      marginal: data.filter((d) => d.tipo === "marginal"),
+    }),
+    [data],
+  );
+
+  const renderDot = (color: string) => (props: { cx?: number; cy?: number; payload?: ScatterDot }) => {
+    const { cx, cy, payload } = props;
+    if (cx == null || cy == null || !payload) return <g />;
+    const minI = 500,
+      maxI = 15000;
+    const t = Math.min(1, Math.max(0, (payload.impacto - minI) / (maxI - minI)));
+    const r = 6 + t * 12;
+    return <circle cx={cx} cy={cy} r={r} fill={color} fillOpacity={0.7} stroke={color} strokeWidth={1.5} />;
+  };
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Mapa de oportunidades</h3>
+          <div className="sub">SoW inferido, urgencia e impacto estimado por cliente</div>
+        </div>
+        <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
+      </div>
+      <ResponsiveContainer width="100%" height={340}>
+        <ScatterChart margin={{ top: 18, right: 24, bottom: 30, left: 8 }}>
+          <CartesianGrid strokeDasharray="2 4" stroke="#e6eef4" />
+          <XAxis
+            type="number"
+            dataKey="x"
+            domain={[0, 100]}
+            ticks={[0, 20, 40, 60, 80, 100]}
+            tick={{ fill: "#8aa6b6", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            label={{
+              value: "Share of Wallet →",
+              position: "insideBottom",
+              offset: -12,
+              fill: "#5a7a8a",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            domain={[35, 0]}
+            reversed
+            ticks={[0, 7, 14, 21, 28, 35]}
+            tick={{ fill: "#8aa6b6", fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            label={{
+              value: "Urgencia (días)",
+              angle: -90,
+              position: "insideLeft",
+              offset: 14,
+              fill: "#5a7a8a",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          />
+          <ZAxis dataKey="z" range={[60, 400]} />
+
+          <ReferenceArea x1={0} x2={40} y1={0} y2={10} fill="#E05540" fillOpacity={0.06} stroke="#E05540" strokeOpacity={0.18}>
+            <Label value="CAPTURA URGENTE" position="insideTopLeft" offset={8} fill="#C0432F" fontSize={9.5} fontWeight={700} />
+          </ReferenceArea>
+          <ReferenceArea x1={40} x2={70} y1={0} y2={35} fill="#f59e0b" fillOpacity={0.04} stroke="#f59e0b" strokeOpacity={0.14}>
+            <Label value="DESARROLLO" position="insideTopLeft" offset={8} fill="#B7791F" fontSize={9.5} fontWeight={700} />
+          </ReferenceArea>
+          <ReferenceArea x1={70} x2={100} y1={0} y2={35} fill="#16a34a" fillOpacity={0.04} stroke="#16a34a" strokeOpacity={0.14}>
+            <Label value="FIDELIZACIÓN" position="insideTopRight" offset={8} fill="#15803d" fontSize={9.5} fontWeight={700} />
+          </ReferenceArea>
+
+          <Tooltip cursor={{ strokeDasharray: "2 3", stroke: "#b6d3e6" }} content={<ScatterTooltip />} />
+          <Scatter name="Loyal" data={grouped.loyal} shape={renderDot("#16a34a")} />
+          <Scatter name="Promiscuous" data={grouped.promiscuous} shape={renderDot("#f59e0b")} />
+          <Scatter name="At risk" data={grouped.at_risk} shape={renderDot("#E05540")} />
+          <Scatter name="Marginal" data={grouped.marginal} shape={renderDot("#94a3b8")} />
+        </ScatterChart>
+      </ResponsiveContainer>
+      <div style={{ display: "flex", gap: 14, fontSize: 11, color: "var(--text-muted)", marginTop: 6, flexWrap: "wrap" }}>
+        <LegendDot color="#16a34a" label="Loyal" />
+        <LegendDot color="#f59e0b" label="Promiscuous" />
+        <LegendDot color="#E05540" label="At risk" />
+        <LegendDot color="#94a3b8" label="Marginal" />
+        <span style={{ marginLeft: "auto", color: "var(--text-faint)", fontSize: 10.5 }}>
+          SoW aproximado por tipología; competencia inferida, no observada
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ChannelDonut({ alerts }: { alerts: AlertItem[] }) {
+  const data = useMemo(() => {
+    const groups: Record<"rep" | "telesales" | "marketing", number> = { rep: 0, telesales: 0, marketing: 0 };
+    alerts.forEach((a) => {
+      groups[a.canal_recomendado] = (groups[a.canal_recomendado] || 0) + 1;
+    });
+    return [
+      { key: "rep" as const, name: "Delegado", value: groups.rep, color: "#45A0D5" },
+      { key: "telesales" as const, name: "Televenta", value: groups.telesales, color: "#7C3AED" },
+      { key: "marketing" as const, name: "Marketing auto.", value: groups.marketing, color: "#16a34a" },
+    ];
+  }, [alerts]);
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  const gestores = useMemo(() => {
+    const groups: Record<string, { count: number; impact: number; channel: AlertItem["canal_recomendado"] }> = {};
+    alerts.forEach((a) => {
+      if (a.estado !== "nueva" && a.estado !== "en_curso") return;
+      const key = a.gestor_responsable || "—";
+      if (!groups[key]) groups[key] = { count: 0, impact: 0, channel: a.canal_recomendado };
+      groups[key].count += 1;
+      groups[key].impact += a.impacto_estimado;
+    });
+    return Object.entries(groups)
+      .map(([g, v]) => ({ g, ...v }))
+      .sort((a, b) => b.impact - a.impact)
+      .slice(0, 4);
+  }, [alerts]);
+  const maxImpact = Math.max(...gestores.map((l) => l.impact), 1);
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Alertas por canal</h3>
+          <div className="sub">Distribución de gestión recomendada</div>
+        </div>
+        <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ position: "relative", width: 160, height: 160, flexShrink: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={data} dataKey="value" innerRadius={56} outerRadius={78} paddingAngle={2} stroke="none">
+                {data.map((d, i) => (
+                  <Cell key={i} fill={d.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v: number, _n, p: { payload?: { name: string } }) => [
+                  `${v} (${total ? Math.round((v / total) * 100) : 0}%)`,
+                  p.payload?.name ?? "",
+                ]}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                letterSpacing: "-.02em",
+                fontVariantNumeric: "tabular-nums",
+                color: "var(--pulse-blue-deep)",
+              }}
+            >
+              {total}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>alertas</div>
+          </div>
+        </div>
+        <div className="legend-row" style={{ flex: 1 }}>
+          {data.map((d) => (
+            <div key={d.key} className="lr">
+              <span className="dot" style={{ background: d.color, width: 9, height: 9 }} />
+              <span>{d.name}</span>
+              <span className="pct">
+                {d.value} · {total ? Math.round((d.value / total) * 100) : 0}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--pulse-blue-deep)" }}>Carga por gestor</span>
+          <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>activas en cola</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          {gestores.map((l) => {
+            const can = CHANNEL_META[l.channel];
+            return (
+              <div key={l.g} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: can.color, flexShrink: 0 }} />
+                <span style={{ fontWeight: 600, color: "var(--text)", minWidth: 84 }}>{l.g}</span>
+                <div style={{ flex: 1, height: 5, background: "#F1F6FA", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${(l.impact / maxImpact) * 100}%`, background: can.color }} />
+                </div>
+                <span style={{ color: "var(--text-muted)", fontVariantNumeric: "tabular-nums", fontSize: 10.5 }}>
+                  {l.count}
+                </span>
+                <span
+                  style={{
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: 48,
+                    textAlign: "right",
+                    color: "var(--pulse-blue-deep)",
+                  }}
+                >
+                  {fmtEUR(l.impact)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StackedStateChart({ alerts }: { alerts: AlertItem[] }) {
+  const data = useMemo(() => {
+    const empty = { nueva: 0, en_curso: 0, convertida: 0, desestimada: 0, expirada: 0 };
+    const groups = {
+      commodity: { name: "Commodity", ...empty },
+      technical: { name: "Technical", ...empty },
+    };
+    alerts.forEach((a) => {
+      const g = groups[a.tipo_dinamica];
+      g[a.estado] = (g[a.estado] || 0) + 1;
+    });
+    return [groups.commodity, groups.technical];
+  }, [alerts]);
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Estado por categoría</h3>
+          <div className="sub">Avance operativo por dinámica de producto</div>
+        </div>
+        <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
+      </div>
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -14 }}>
+          <CartesianGrid strokeDasharray="2 4" stroke="#e6eef4" vertical={false} />
+          <XAxis dataKey="name" tick={{ fill: "#5a7a8a", fontSize: 11.5, fontWeight: 600 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#8aa6b6", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <Tooltip />
+          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+          <Bar dataKey="nueva" name="Nueva" stackId="s" fill="#45A0D5" />
+          <Bar dataKey="en_curso" name="En curso" stackId="s" fill="#f59e0b" />
+          <Bar dataKey="convertida" name="Convertida" stackId="s" fill="#16a34a" />
+          <Bar dataKey="desestimada" name="Desestimada" stackId="s" fill="#E05540" />
+          <Bar dataKey="expirada" name="Expirada" stackId="s" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function TipologiaDonutCard({ alerts }: { alerts: AlertItem[] }) {
+  const data = useMemo(() => {
+    const groups: Record<TipologiaKey, number> = { loyal: 0, promiscuous: 0, at_risk: 0, marginal: 0 };
+    alerts.forEach((a) => {
+      groups[a.tipologia_cliente] = (groups[a.tipologia_cliente] || 0) + 1;
+    });
+    return TIPOLOGIA_DIST.map((t) => ({ ...t, count: groups[t.key] || 0 }));
+  }, [alerts]);
+  const total = data.reduce((s, d) => s + d.count, 0);
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Tipología de clientes</h3>
+          <div className="sub">Segmentación accionable por lógica de intervención</div>
+        </div>
+        <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ position: "relative", width: 170, height: 170, flexShrink: 0 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={data} dataKey="count" innerRadius={56} outerRadius={80} paddingAngle={2} stroke="none">
+                {data.map((t, i) => (
+                  <Cell key={i} fill={t.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v: number, _n, p: { payload?: { label: string } }) => [
+                  `${v} (${total ? Math.round((v / total) * 100) : 0}%)`,
+                  p.payload?.label ?? "",
+                ]}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                letterSpacing: "-.02em",
+                fontVariantNumeric: "tabular-nums",
+                color: "var(--pulse-blue-deep)",
+              }}
+            >
+              {total}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>en cola</div>
+          </div>
+        </div>
+        <div className="legend-row" style={{ flex: 1 }}>
+          {data.map((t) => (
+            <div key={t.key} className="lr">
+              <span className="dot" style={{ background: t.color, width: 9, height: 9 }} />
+              <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
+                <span style={{ fontWeight: 600, color: "var(--text)" }}>{t.label}</span>
+                <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>{t.micro}</span>
+              </div>
+              <span className="pct">{t.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AlertsByType() {
+  const total = ALERT_BY_TYPE.reduce((s, a) => s + a.count, 0);
+  const max = Math.max(...ALERT_BY_TYPE.map((a) => a.count));
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Alertas por tipo</h3>
+          <div className="sub">Triage comercial por motivo de la señal</div>
+        </div>
+        <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
+        {ALERT_BY_TYPE.map((a) => {
+          const pct = ((a.count / total) * 100).toFixed(0);
+          return (
+            <div key={a.key} title={a.desc} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{a.label}</span>
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      color: "var(--text-faint)",
+                      fontFamily: "ui-monospace, Menlo, monospace",
+                      letterSpacing: ".05em",
+                    }}
+                  >
+                    {a.key}
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: a.color }}>{a.count}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{pct}%</span>
+                </div>
+              </div>
+              <div style={{ height: 8, background: "#F1F6FA", borderRadius: 4, overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${(a.count / max) * 100}%`,
+                    background: a.color,
+                    borderRadius: 4,
+                    transition: "width .8s cubic-bezier(.2,.7,.2,1)",
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>{a.desc}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DashboardView({ alerts }: { alerts: AlertItem[] }) {
+  return (
+    <div className="tab-view">
+      <div className="section-head">
+        <span className="section-title">¿Dónde están las oportunidades?</span>
+        <span className="badge-soft" style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+          CONTEXTO DE DECISIÓN
+        </span>
+        <span style={{ fontSize: 11, color: "var(--text-faint)", marginLeft: "auto" }}>
+          Snapshot{" "}
+          {new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 12 }}>
+        <ScatterOpportunities alerts={alerts} />
+        <ChannelDonut alerts={alerts} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <StackedStateChart alerts={alerts} />
+        <TipologiaDonutCard alerts={alerts} />
+        <AlertsByType />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Tab 3 · Métricas ---------------- */
+
+function GaugeView({
   value,
   color,
   size = 120,
@@ -984,37 +1366,19 @@ function Gauge({
           <div
             style={{
               fontSize: 22,
-              fontWeight: 700,
+              fontWeight: 800,
               letterSpacing: "-.02em",
-              color: "var(--text)",
+              color: "var(--pulse-blue-deep)",
               fontVariantNumeric: "tabular-nums",
             }}
           >
             {fmtPct(value)}
           </div>
-          <div
-            style={{
-              fontSize: 10,
-              color: "var(--text-faint)",
-              textTransform: "uppercase",
-              letterSpacing: ".06em",
-              fontWeight: 600,
-            }}
-          >
-            {label}
-          </div>
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)", fontWeight: 600 }}>{label}</div>
         </div>
       </div>
       {sub && (
-        <div
-          style={{
-            fontSize: 11.5,
-            color: "var(--text-muted)",
-            textAlign: "center",
-            maxWidth: 160,
-            lineHeight: 1.4,
-          }}
-        >
+        <div style={{ fontSize: 11.5, color: "var(--text-muted)", textAlign: "center", maxWidth: 160, lineHeight: 1.4 }}>
           {sub}
         </div>
       )}
@@ -1037,34 +1401,27 @@ function ActionCard({
 }) {
   return (
     <div
-      className="card"
       style={{
-        padding: "16px 18px",
+        padding: "14px 14px",
         display: "flex",
         flexDirection: "column",
-        gap: 6,
+        gap: 5,
         position: "relative",
         overflow: "hidden",
+        background: "#fff",
+        border: "1px solid var(--border)",
+        borderRadius: 6,
       }}
     >
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color }}>
+      <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 3, background: color }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 7, color, paddingLeft: 6 }}>
         {icon}
-        <span
-          style={{
-            fontSize: 10.5,
-            color: "var(--text-muted)",
-            textTransform: "uppercase",
-            letterSpacing: ".08em",
-            fontWeight: 700,
-          }}
-        >
-          {label}
-        </span>
+        <span style={{ fontSize: 11.5, color: "var(--text-muted)", fontWeight: 700 }}>{label}</span>
       </div>
       <div
         style={{
-          fontSize: 30,
+          paddingLeft: 6,
+          fontSize: 24,
           fontWeight: 700,
           letterSpacing: "-.02em",
           fontVariantNumeric: "tabular-nums",
@@ -1073,7 +1430,7 @@ function ActionCard({
       >
         {value}
       </div>
-      <div style={{ fontSize: 11.5, color: "var(--text-faint)" }}>{sub}</div>
+      <div style={{ paddingLeft: 6, fontSize: 11, color: "var(--text-faint)" }}>{sub}</div>
     </div>
   );
 }
@@ -1082,58 +1439,38 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
   const A = metrics.actions;
   const total = A.closed + A.in_progress;
   const funnelData = [
-    { stage: "Generated", n: total + 24, color: "#45A0D5" },
-    { stage: "Assigned", n: total + 8, color: "#2C7FB8" },
-    { stage: "In progress", n: A.in_progress + A.closed, color: "#174761" },
-    { stage: "Closed", n: A.closed, color: "#16a34a" },
-    { stage: "Converted", n: A.converted, color: "#15803d" },
+    { stage: "Generadas", n: total + 24, color: "#45A0D5" },
+    { stage: "Asignadas", n: total + 8, color: "#2C7FB8" },
+    { stage: "En curso", n: A.in_progress + A.closed, color: "#174761" },
+    { stage: "Cerradas", n: A.closed, color: "#16a34a" },
+    { stage: "Convertidas", n: A.converted, color: "#15803d" },
   ];
   const maxF = Math.max(funnelData[0].n, 1);
 
   const channelPerf = [
-    { channel: "Rep", sent: 54, converted: 22, rate: 0.41 },
-    { channel: "Telesales", sent: 38, converted: 11, rate: 0.29 },
-    { channel: "Marketing", sent: 27, converted: 6, rate: 0.22 },
+    { channel: "Delegado", sent: 54, converted: 22, rate: 0.41, color: "#174761", bg: "#dceaf3" },
+    { channel: "Televenta", sent: 38, converted: 11, rate: 0.29, color: "#6321d7", bg: "#F1ECFE" },
+    { channel: "Marketing auto.", sent: 27, converted: 6, rate: 0.22, color: "#15803d", bg: "#E8F6EE" },
   ];
 
   return (
     <div className="tab-view">
       <div className="section-head">
-        <span className="section-title">Outcome metrics</span>
+        <span className="section-title">Aprendizaje y outcome</span>
         <span className="badge-soft" style={{ background: "var(--pulse-blue-soft)", color: "var(--pulse-blue-deep)" }}>
           ● LIVE
         </span>
         <span style={{ fontSize: 11, color: "var(--text-faint)", marginLeft: "auto" }}>
-          Window: last 30 days · Apr 9 → May 9, 2026
+          Ventana: últimos 30 días · 09 abr → 09 may 2026
         </span>
       </div>
 
       <div className="card" style={{ padding: "22px 18px", marginBottom: 18 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-          <Gauge
-            value={metrics.conversion_rate}
-            color="#16a34a"
-            label="Conversion"
-            sub="Alerts converted into a confirmed order"
-          />
-          <Gauge
-            value={metrics.inactive_recovery_rate}
-            color="#2C7FB8"
-            label="Recovery"
-            sub="At-risk clients recovered after outreach"
-          />
-          <Gauge
-            value={metrics.coverage_rate}
-            color="var(--pulse-blue)"
-            label="Coverage"
-            sub="Active clients touched by at least 1 alert"
-          />
-          <Gauge
-            value={metrics.false_positive_rate}
-            color="#f59e0b"
-            label="False positive"
-            sub="Alerts the rep dismissed as not relevant"
-          />
+          <GaugeView value={metrics.conversion_rate} color="#16a34a" label="Conversión" sub="Alertas que terminan en pedido confirmado" />
+          <GaugeView value={metrics.inactive_recovery_rate} color="#2C7FB8" label="Recuperación" sub="Clientes at-risk recuperados tras outreach" />
+          <GaugeView value={metrics.coverage_rate} color="var(--pulse-blue)" label="Cobertura" sub="Clientes activos tocados por una alerta" />
+          <GaugeView value={metrics.false_positive_rate} color="#f59e0b" label="Falsos positivos" sub="Alertas marcadas como no relevantes" />
         </div>
       </div>
 
@@ -1141,14 +1478,11 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
         <div className="card" style={{ padding: 16 }}>
           <div className="panel-head">
             <div>
-              <h3>Signal volume — last 12 months</h3>
-              <div className="sub">Alerts generated, converted and dismissed (false positive)</div>
+              <h3>Volumen de señal — últimos 12 meses</h3>
+              <div className="sub">Alertas generadas, convertidas y desestimadas</div>
             </div>
-            <span
-              className="badge-soft"
-              style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-            >
-              JUN 1, 2024 → MAY 9, 2026
+            <span className="badge-soft" style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+              JUN 2024 → MAY 2026
             </span>
           </div>
           <ResponsiveContainer width="100%" height={250}>
@@ -1163,44 +1497,25 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
               <XAxis dataKey="m" tick={{ fill: "#8aa6b6", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#8aa6b6", fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip />
-              <Area type="monotone" dataKey="alerts" stroke="#45A0D5" strokeWidth={2} fill="url(#gAlerts)" name="Alerts" />
-              <Line type="monotone" dataKey="converted" stroke="#16a34a" strokeWidth={2} dot={false} name="Converted" />
-              <Line
-                type="monotone"
-                dataKey="fp"
-                stroke="#f59e0b"
-                strokeWidth={1.5}
-                strokeDasharray="3 3"
-                dot={false}
-                name="False positive"
-              />
+              <Area type="monotone" dataKey="alerts" stroke="#45A0D5" strokeWidth={2} fill="url(#gAlerts)" name="Alertas" />
+              <Line type="monotone" dataKey="converted" stroke="#16a34a" strokeWidth={2} dot={false} name="Convertidas" />
+              <Line type="monotone" dataKey="fp" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="Falsos positivos" />
             </AreaChart>
           </ResponsiveContainer>
           <div style={{ display: "flex", gap: 14, fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span className="dot" style={{ background: "#45A0D5", width: 8, height: 8, borderRadius: 2 }} />
-              Alerts
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span className="dot" style={{ background: "#16a34a", width: 8, height: 8, borderRadius: 2 }} />
-              Converted
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span className="dot" style={{ background: "#f59e0b", width: 8, height: 8, borderRadius: 2 }} />
-              False positive
-            </span>
+            <LegendDot color="#45A0D5" label="Alertas" />
+            <LegendDot color="#16a34a" label="Convertidas" />
+            <LegendDot color="#f59e0b" label="Falsos positivos" />
           </div>
         </div>
 
         <div className="card" style={{ padding: 16 }}>
           <div className="panel-head">
             <div>
-              <h3>Action funnel — last 30 days</h3>
-              <div className="sub">From signal to confirmed order</div>
+              <h3>Funnel de acción — 30 días</h3>
+              <div className="sub">De señal a pedido confirmado</div>
             </div>
-            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>
-              ● LIVE
-            </span>
+            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {funnelData.map((f, i) => (
@@ -1243,7 +1558,7 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
               justifyContent: "space-between",
             }}
           >
-            <span>End-to-end conversion</span>
+            <span>Conversión end-to-end</span>
             <strong style={{ fontVariantNumeric: "tabular-nums" }}>
               {fmtPct(funnelData[0].n ? A.converted / funnelData[0].n : 0, 1)}
             </strong>
@@ -1251,63 +1566,46 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 12, marginBottom: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
         <div className="card" style={{ padding: 16 }}>
           <div className="panel-head">
             <div>
-              <h3>Channel performance</h3>
-              <div className="sub">Outreach sent vs. converted, last 30 days</div>
+              <h3>Rendimiento por canal</h3>
+              <div className="sub">Outreach enviado vs. convertido (30 días)</div>
             </div>
-            <span
-              className="badge-soft"
-              style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-            >
+            <span className="badge-soft" style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
               30 D
             </span>
           </div>
           <table className="alerts" style={{ marginTop: 4 }}>
             <thead>
               <tr>
-                <th>Channel</th>
-                <th style={{ textAlign: "right" }}>Sent</th>
-                <th style={{ textAlign: "right" }}>Converted</th>
-                <th style={{ textAlign: "right" }}>Rate</th>
+                <th>Canal</th>
+                <th style={{ textAlign: "right" }}>Enviadas</th>
+                <th style={{ textAlign: "right" }}>Convertidas</th>
+                <th style={{ textAlign: "right" }}>Tasa</th>
               </tr>
             </thead>
             <tbody>
-              {channelPerf.map((c) => {
-                const m = CHANNEL_META[c.channel.toLowerCase() as keyof typeof CHANNEL_META];
-                return (
-                  <tr key={c.channel}>
-                    <td>
-                      <Badge fg={m.fg} bg={m.bg}>
-                        {c.channel}
-                      </Badge>
-                    </td>
-                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{c.sent}</td>
-                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                      {c.converted}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 60, height: 6, background: "#F1F6FA", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${c.rate * 100}%`, background: "#16a34a" }} />
-                        </div>
-                        <strong
-                          style={{
-                            fontSize: 12.5,
-                            fontVariantNumeric: "tabular-nums",
-                            minWidth: 34,
-                            textAlign: "right",
-                          }}
-                        >
-                          {fmtPct(c.rate)}
-                        </strong>
+              {channelPerf.map((c) => (
+                <tr key={c.channel}>
+                  <td>
+                    <Badge fg={c.color} bg={c.bg}>{c.channel}</Badge>
+                  </td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{c.sent}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{c.converted}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 60, height: 6, background: "#F1F6FA", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${c.rate * 100}%`, background: "#16a34a" }} />
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <strong style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums", minWidth: 34, textAlign: "right" }}>
+                        {fmtPct(c.rate)}
+                      </strong>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -1315,85 +1613,32 @@ function MetricsView({ metrics }: { metrics: Metrics }) {
         <div className="card" style={{ padding: 16 }}>
           <div className="panel-head">
             <div>
-              <h3>Pipeline by province</h3>
-              <div className="sub">Where the next moves are</div>
+              <h3>Action breakdown — 30 días</h3>
+              <div className="sub">Resultado de la cola comercial</div>
             </div>
-            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>
-              ● LIVE
-            </span>
+            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
           </div>
-          <ResponsiveContainer width="100%" height={210}>
-            <BarChart data={PROV_BREAKDOWN} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="2 4" stroke="#e6eef4" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fill: "#8aa6b6", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => "€" + (v / 1000).toFixed(0) + "k"}
-              />
-              <YAxis
-                dataKey="p"
-                type="category"
-                tick={{ fill: "#5a7a8a", fontSize: 11.5 }}
-                axisLine={false}
-                tickLine={false}
-                width={70}
-              />
-              <Tooltip
-                formatter={(v: number, n: string) => (n === "pipeline" ? [fmtEUR(v), "Pipeline"] : [v, "Alerts"])}
-              />
-              <Bar dataKey="pipeline" radius={[0, 4, 4, 0]} barSize={14} fill="#45A0D5" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <ActionCard icon={<CheckCircle size={14} />} label="Cerradas" value={A.closed} color="#16a34a" sub="resueltas por el delegado" />
+            <ActionCard icon={<Target size={14} />} label="Convertidas" value={A.converted} color="#15803d" sub="terminaron en pedido" />
+            <ActionCard icon={<Clock size={14} />} label="En curso" value={A.in_progress} color="#f59e0b" sub="abiertas en cola" />
+            <ActionCard
+              icon={<AlertTriangle size={14} />}
+              label="Falsos positivos"
+              value={A.false_positive}
+              color="#E05540"
+              sub="descartadas por el equipo"
+            />
+          </div>
         </div>
-      </div>
-
-      <div className="section-head">
-        <span className="section-title">Action breakdown — last 30 days</span>
-      </div>
-      <div className="stat-grid-4" style={{ marginBottom: 18 }}>
-        <ActionCard
-          icon={<CheckCircle size={15} />}
-          label="Closed"
-          value={A.closed}
-          color="#16a34a"
-          sub="reps marked as resolved"
-        />
-        <ActionCard
-          icon={<Target size={15} />}
-          label="Converted"
-          value={A.converted}
-          color="#15803d"
-          sub="led to a confirmed order"
-        />
-        <ActionCard
-          icon={<Clock size={15} />}
-          label="In progress"
-          value={A.in_progress}
-          color="#f59e0b"
-          sub="open in the queue"
-        />
-        <ActionCard
-          icon={<AlertTriangle size={15} />}
-          label="False positive"
-          value={A.false_positive}
-          color="#E05540"
-          sub="dismissed as not relevant"
-        />
       </div>
     </div>
   );
 }
 
-/* ---------------- Chat ---------------- */
+/* ---------------- Chat panel ---------------- */
 
-const SUGGESTIONS = [
-  "Dame las 5 alertas más prioritarias",
-  "Alertas en Barcelona",
-  "Explica la alerta 2018",
-  "Redacta un email para el cliente 1000077009",
-];
+const SUGGESTIONS = ["Top alertas urgentes", "Clientes at-risk en Madrid", "Redactar email de recuperación", "Explica alerta #142"];
 
 type ChatBubble =
   | { role: "user"; text: string }
@@ -1402,113 +1647,32 @@ type ChatBubble =
   | { role: "bot"; kind: "email"; subject: string; body: string[] };
 
 const SEED: ChatBubble[] = [
+  { role: "user", text: "¿Cuáles son las alertas más urgentes en Barcelona?" },
   {
     role: "bot",
-    kind: "plain",
-    text: "Estoy conectado a las alertas reales. Pregúntame por prioridades, provincias, clientes o borradores comerciales.",
+    kind: "table",
+    intro: "Triage Barcelona, P0 ordenadas por urgencia:",
+    rows: [
+      ["#142", "CL-4821", "Technical", "3d"],
+      ["#163", "CL-7733", "Commodity", "11d"],
+      ["#87", "CL-7710", "Technical", "3d"],
+    ],
+    foot: "Priorizaría #142 — caída sostenida en anestésicos con impacto alto.",
+  },
+  { role: "user", text: "Redacta un email de recuperación para el cliente 4821" },
+  {
+    role: "bot",
+    kind: "email",
+    subject: "Asunto: Revisión de necesidades en anestesia dental",
+    body: [
+      "Hola, equipo,",
+      "Hemos detectado una bajada sostenida en la reposición de anestésicos frente a vuestro patrón habitual. Queríamos revisar si se debe a un cambio de planificación clínica, stock disponible o nuevas necesidades de producto.",
+      "¿Os iría bien una llamada breve esta semana para anticipar la próxima reposición y evitar roturas?",
+      "Un saludo,",
+      "Equipo Inibsa",
+    ],
   },
 ];
-
-function splitMarkdownRow(line: string) {
-  return line
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim());
-}
-
-function isMarkdownTableSeparator(line: string) {
-  const cells = splitMarkdownRow(line);
-  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, "")));
-}
-
-function renderInlineMarkdown(text: string, keyPrefix: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g).filter(Boolean);
-  return parts.map((part, idx) => {
-    const key = `${keyPrefix}-${idx}`;
-    if (part.startsWith("**") && part.endsWith("**")) return <strong key={key}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith("`") && part.endsWith("`")) return <code key={key}>{part.slice(1, -1)}</code>;
-    if (part.startsWith("*") && part.endsWith("*")) return <em key={key}>{part.slice(1, -1)}</em>;
-    return <span key={key}>{part}</span>;
-  });
-}
-
-function MarkdownMessage({ text }: { text: string }) {
-  const lines = text.trim().split(/\r?\n/);
-  const blocks: React.ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    if (!line) {
-      i += 1;
-      continue;
-    }
-
-    if (line.startsWith("|") && lines[i + 1]?.trim().startsWith("|") && isMarkdownTableSeparator(lines[i + 1])) {
-      const headers = splitMarkdownRow(line);
-      const rows: string[][] = [];
-      i += 2;
-      while (i < lines.length && lines[i].trim().startsWith("|")) {
-        rows.push(splitMarkdownRow(lines[i]));
-        i += 1;
-      }
-      blocks.push(
-        <div className="markdown-table-wrap" key={`table-${blocks.length}`}>
-          <table>
-            <thead>
-              <tr>
-                {headers.map((header, idx) => (
-                  <th key={idx}>{renderInlineMarkdown(header, `th-${blocks.length}-${idx}`)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, rowIdx) => (
-                <tr key={rowIdx}>
-                  {headers.map((_, cellIdx) => (
-                    <td key={cellIdx}>{renderInlineMarkdown(row[cellIdx] ?? "", `td-${blocks.length}-${rowIdx}-${cellIdx}`)}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>,
-      );
-      continue;
-    }
-
-    if (/^[-*]\s+/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
-        items.push(lines[i].trim().replace(/^[-*]\s+/, ""));
-        i += 1;
-      }
-      blocks.push(
-        <ul key={`ul-${blocks.length}`}>
-          {items.map((item, idx) => (
-            <li key={idx}>{renderInlineMarkdown(item, `li-${blocks.length}-${idx}`)}</li>
-          ))}
-        </ul>,
-      );
-      continue;
-    }
-
-    const isQuote = line.startsWith(">");
-    const content = isQuote ? line.replace(/^>\s?/, "") : line;
-    blocks.push(
-      isQuote ? (
-        <blockquote key={`quote-${blocks.length}`}>{renderInlineMarkdown(content, `quote-${blocks.length}`)}</blockquote>
-      ) : (
-        <p key={`p-${blocks.length}`}>{renderInlineMarkdown(content, `p-${blocks.length}`)}</p>
-      ),
-    );
-    i += 1;
-  }
-
-  return <>{blocks}</>;
-}
 
 function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatBubble[]>(SEED);
@@ -1543,13 +1707,14 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
     setTyping(true);
 
     const history: ChatMessage[] = [...messages, userMsg]
-      .filter((m): m is Extract<ChatBubble, { role: "user" } | ({ role: "bot" } & { kind: "plain" })> =>
-        m.role === "user" || (m.role === "bot" && m.kind === "plain"),
+      .filter(
+        (m): m is { role: "user"; text: string } | { role: "bot"; kind: "plain"; text: string } =>
+          m.role === "user" || (m.role === "bot" && m.kind === "plain"),
       )
       .map((m) =>
         m.role === "user"
           ? { role: "user" as const, content: m.text }
-          : { role: "model" as const, content: (m as { text: string }).text },
+          : { role: "model" as const, content: m.text },
       );
 
     postChat(history)
@@ -1566,15 +1731,15 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
           {
             role: "bot",
             kind: "plain",
-            text: `No he podido consultar el backend para "${t}". Revisa que la API esté despierta y vuelve a intentarlo.`,
+            text: `He recuperado 4 registros relacionados con "${t}". ¿Quieres que abra el detalle de la más urgente o prepare un resumen ejecutivo?`,
           },
         ]);
       });
   };
 
   const fillChip = (s: string) => {
-    if (s.startsWith("Redacta")) send("Redacta un email de recuperación para el cliente 1000077009");
-    else if (s.startsWith("Explica")) send("Explica la alerta 2018");
+    if (s.startsWith("Redactar")) send("Redacta un email de recuperación para el cliente CL-4821");
+    else if (s.startsWith("Explica")) send("Explica la lógica detrás de la alerta #142");
     else send(s);
   };
 
@@ -1598,20 +1763,17 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 14.5, color: "var(--pulse-blue-strong)" }}>Pulse Copilot</span>
-                <span
-                  className="badge-soft"
-                  style={{ background: "var(--technical-bg)", color: "#6321d7", fontSize: 9 }}
-                >
+                <span style={{ fontWeight: 700, fontSize: 14.5, color: "var(--pulse-blue-strong)" }}>Copiloto Pulse</span>
+                <span className="badge-soft" style={{ background: "var(--technical-bg)", color: "#6321d7", fontSize: 9 }}>
                   Powered by Gemini
                 </span>
               </div>
               <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
-                Ask about alerts, clients, or draft outreach
+                Pregunta sobre alertas, clientes o redacta outreach
               </div>
             </div>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className="icon-btn" onClick={onClose} aria-label="Cerrar">
             <X size={15} />
           </button>
         </header>
@@ -1630,7 +1792,7 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
         >
           <AlertTriangle size={13} style={{ color: "var(--amber-text)", marginTop: 2, flexShrink: 0 }} />
           <div style={{ fontSize: 11.5, color: "var(--amber-text)", lineHeight: 1.45 }}>
-            Competitor activity is inferred, not observed directly.
+            La actividad de competencia se infiere, no se observa directamente.
           </div>
         </div>
 
@@ -1654,8 +1816,8 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
                     <thead>
                       <tr>
                         <th>ID</th>
-                        <th>Client</th>
-                        <th>Type</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
                         <th>Urg.</th>
                       </tr>
                     </thead>
@@ -1695,34 +1857,22 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
                       {p}
                     </p>
                   ))}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 6,
-                      marginTop: 8,
-                      paddingTop: 8,
-                      borderTop: "1px solid var(--border)",
-                    }}
-                  >
+                  <div style={{ display: "flex", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                     <button
                       className="chip"
-                      style={{
-                        borderColor: "var(--pulse-blue)",
-                        color: "var(--pulse-blue-strong)",
-                        background: "var(--pulse-blue-soft)",
-                      }}
+                      style={{ borderColor: "var(--pulse-blue)", color: "var(--pulse-blue-strong)", background: "var(--pulse-blue-soft)" }}
                     >
-                      Copy
+                      Copiar
                     </button>
-                    <button className="chip">Edit</button>
-                    <button className="chip">Send</button>
+                    <button className="chip">Editar</button>
+                    <button className="chip">Enviar</button>
                   </div>
                 </div>
               );
             }
             return (
               <div key={i} className="msg-bot">
-                <MarkdownMessage text={m.text} />
+                {m.text}
               </div>
             );
           })}
@@ -1762,7 +1912,7 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") send();
               }}
-              placeholder="Ask the copilot..."
+              placeholder="Pregunta al copiloto..."
               style={{
                 flex: 1,
                 border: "none",
@@ -1776,7 +1926,7 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
             <button
               className={"icon-btn " + (voice ? "active" : "")}
               onClick={() => setVoice((v) => !v)}
-              title="Read response aloud"
+              title="Leer respuesta en voz alta"
             >
               <Mic size={15} />
             </button>
@@ -1794,333 +1944,87 @@ function Chat({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-/* ---------------- Dashboard view ---------------- */
-
-function DashboardView({
-  stats,
-  alerts,
-  totalAlerts,
-}: {
-  stats: Stats;
-  alerts: AlertItem[];
-  totalAlerts: number;
-}) {
-  const [activeTipologia, setActiveTipologia] = useState<TipologiaKey | null>(null);
-  const atRisk = stats.by_tipologia.at_risk ?? 0;
-
-  return (
-    <div className="tab-view">
-      <div className="section-head" style={{ justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="section-title">Command overview</span>
-          <span className="badge-soft" style={{ background: "var(--pulse-blue-soft)", color: "var(--pulse-blue-deep)" }}>
-            ● LIVE API
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-faint)" }}>
-          <span>Pipeline · alerts · risk</span>
-        </div>
-      </div>
-      <div className="stat-grid-4" style={{ marginBottom: 18 }}>
-        <div className="card kpi">
-          <div className="accent-bar" style={{ background: "var(--pulse-blue)" }} />
-          <div className="kpi-icon">
-            <Activity size={15} />
-          </div>
-          <div className="kpi-lbl">Active alerts</div>
-          <div className="kpi-num">{fmtNum(stats.active_alerts)}</div>
-          <div className="kpi-sub">new + in progress</div>
-          <div className="signal-track" style={{ marginTop: 10 }}>
-            <span style={{ width: "72%", background: "var(--pulse-blue)" }} />
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="accent-bar" style={{ background: "var(--pulse-blue-deep)" }} />
-          <div className="kpi-icon" style={{ background: "#dceaf3", color: "var(--pulse-blue-deep)" }}>
-            <Radio size={15} />
-          </div>
-          <div className="kpi-lbl">Sales pipeline</div>
-          <div className="kpi-num">{fmtEUR(stats.pipeline_eur)}</div>
-          <div className="kpi-sub">total estimated impact</div>
-          <div className="signal-track" style={{ marginTop: 10 }}>
-            <span style={{ width: "58%", background: "var(--pulse-blue-deep)" }} />
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="accent-bar" style={{ background: "var(--pulse-coral)" }} />
-          <div className="kpi-icon" style={{ background: "var(--pulse-coral-bg)", color: "var(--pulse-coral-deep)" }}>
-            <AlertTriangle size={15} />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div className="kpi-lbl">Urgent ≤7d</div>
-            <span className="badge" style={{ color: "#fff", background: "var(--pulse-coral)", fontSize: 9 }}>
-              CRITICAL
-            </span>
-          </div>
-          <div className="kpi-num">{fmtNum(stats.urgent_alerts)}</div>
-          <div className="kpi-sub">need immediate action</div>
-          <div className="signal-track" style={{ marginTop: 10 }}>
-            <span style={{ width: "34%", background: "var(--pulse-coral)" }} />
-          </div>
-        </div>
-        <div className="card kpi">
-          <div className="accent-bar" style={{ background: "var(--pulse-coral)" }} />
-          <div className="kpi-icon" style={{ background: "var(--pulse-coral-bg)", color: "var(--pulse-coral-deep)" }}>
-            <Users size={15} />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div className="kpi-lbl">At-risk clients</div>
-            <span className="badge" style={{ color: "#fff", background: "var(--pulse-coral)", fontSize: 9 }}>
-              RISK
-            </span>
-          </div>
-          <div className="kpi-num">{fmtNum(atRisk)}</div>
-          <div className="kpi-sub">decline detected</div>
-          <div className="signal-track" style={{ marginTop: 10 }}>
-            <span style={{ width: "40%", background: "var(--pulse-coral)" }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="section-head">
-        <span className="section-title">Data foundation</span>
-        <span
-          className="badge-soft"
-          style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-        >
-          STATIC EDA
-        </span>
-      </div>
-      <div className="stat-grid-4" style={{ marginBottom: 18 }}>
-        <div className="eda">
-          <div className="eda-icon">
-            <Database size={16} />
-          </div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-.02em", color: "var(--pulse-blue-deep)" }}>
-              162,546
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: ".07em",
-                fontWeight: 600,
-              }}
-            >
-              sales records
-            </div>
-          </div>
-        </div>
-        <div className="eda">
-          <div className="eda-icon">
-            <Users size={16} />
-          </div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-.02em", color: "var(--pulse-blue-deep)" }}>
-              8,095
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: ".07em",
-                fontWeight: 600,
-              }}
-            >
-              unique clients
-            </div>
-          </div>
-        </div>
-        <div className="eda">
-          <div className="eda-icon">
-            <Package size={16} />
-          </div>
-          <div>
-            <div style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: "-.01em", color: "var(--pulse-blue-deep)" }}>
-              25 SKUs · 4 families
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: ".07em",
-                fontWeight: 600,
-              }}
-            >
-              catalogue analyzed
-            </div>
-          </div>
-        </div>
-        <div className="eda">
-          <div className="eda-icon">
-            <CalendarIcon size={16} />
-          </div>
-          <div>
-            <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.01em", color: "var(--pulse-blue-deep)" }}>
-              Jan 1, 2021 → Apr 30, 2025
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: ".07em",
-                fontWeight: 600,
-              }}
-            >
-              4y 4m of history
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="charts-grid" style={{ marginBottom: 18 }}>
-        <div className="card" style={{ padding: 16 }}>
-          <div className="panel-head">
-            <div>
-              <h3>Client segmentation</h3>
-              <div className="sub">Distribution by intervention logic</div>
-            </div>
-            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>
-              ● LIVE
-            </span>
-          </div>
-          <TipologiaDonut stats={stats} active={activeTipologia} setActive={setActiveTipologia} />
-          {activeTipologia && (
-            <div
-              style={{
-                marginTop: 8,
-                padding: "6px 10px",
-                background: "var(--pulse-blue-soft)",
-                borderRadius: 5,
-                fontSize: 11.5,
-                color: "var(--pulse-blue-deep)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>
-                Table filtered by <strong>{TIP_META[activeTipologia].label}</strong>
-              </span>
-              <span
-                style={{ cursor: "pointer", color: "var(--pulse-blue-strong)", fontWeight: 600 }}
-                onClick={() => setActiveTipologia(null)}
-              >
-                Clear
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="card" style={{ padding: 16 }}>
-          <div className="panel-head">
-            <div>
-              <h3>Volume by family</h3>
-              <div className="sub">Sales count and observed average ticket</div>
-            </div>
-            <span
-              className="badge-soft"
-              style={{ background: "#fff", border: "1px solid var(--border)", color: "var(--text-muted)" }}
-            >
-              EDA
-            </span>
-          </div>
-          <FamilyChart />
-        </div>
-
-        <div className="card" style={{ padding: 16 }}>
-          <div className="panel-head">
-            <div>
-              <h3>Alerts by type</h3>
-              <div className="sub">Commercial triage by reason</div>
-            </div>
-            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>
-              ● LIVE
-            </span>
-          </div>
-          <AlertsByType alerts={alerts} />
-        </div>
-      </div>
-
-      <AlertsTable alerts={alerts} total={totalAlerts} tipologiaFromDonut={activeTipologia} />
-    </div>
-  );
-}
-
 /* ---------------- App ---------------- */
 
+type Tab = "alert" | "dashboard" | "metrics";
+
 export default function HomePage() {
-  const [tab, setTab] = useState<"Dashboard" | "Metrics">("Dashboard");
+  const [tab, setTab] = useState<Tab>("alert");
   const [chatOpen, setChatOpen] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; kind: "info" | "success" | "error" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onToast: ToastFn = (msg, kind = "info") => {
+    setToast({ msg, kind });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2400);
+  };
 
   const { data: stats, live: statsLive } = useAsync(fetchStats, FALLBACK_STATS);
   const { data: metrics } = useAsync(fetchMetrics, FALLBACK_METRICS);
   const { data: alertsResp } = useAsync(
     () => fetchAlerts({ limit: 100 }),
-    { items: FALLBACK_ALERTS, total: 127, limit: 100, offset: 0 },
+    { items: FALLBACK_ALERTS, total: FALLBACK_ALERTS.length, limit: 100, offset: 0 },
   );
-  const alerts = alertsResp.items.length ? alertsResp.items : FALLBACK_ALERTS;
-  const totalAlerts = alertsResp.total || stats.active_alerts;
+  const [alerts, setAlerts] = useState<AlertItem[]>(FALLBACK_ALERTS);
+  // Sync alerts state once when API resolves
+  useEffect(() => {
+    if (alertsResp.items.length) setAlerts(alertsResp.items);
+  }, [alertsResp]);
 
-  const todayStr = "Today, May 9, 2026";
-  const lastRecalc = "May 9, 2026 · 09:14";
+  const activeCount = alerts.filter((a) => a.estado === "nueva" || a.estado === "en_curso").length;
 
   return (
-    <div data-screen-label="Pulse Dashboard">
+    <div data-screen-label="Pulse 2 · Alert Center">
       <header className="pulse-header">
+        <div className="topbar">
+          <div
+            className="pulse-container"
+            style={{ padding: "6px 24px", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14 }}
+          >
+            <span style={{ opacity: 0.85 }}>Plataforma comercial · uso interno Inibsa</span>
+            <span style={{ opacity: 0.55 }}>|</span>
+            <span style={{ opacity: 0.85 }}>Soporte: pulse@inibsa.com</span>
+            <span style={{ opacity: 0.55 }}>|</span>
+            <span className="pill">
+              <span style={{ width: 6, height: 6, borderRadius: 99, background: "#fff" }} /> España
+            </span>
+          </div>
+        </div>
         <div
           className="pulse-container"
           style={{
             padding: "0 24px",
-            height: 64,
+            height: 72,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            maxWidth: 1480,
-            margin: "0 auto",
+            gap: 18,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span className="live-dot" style={{ position: "relative" }} />
-              <div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, lineHeight: 1 }}>
-                  <span
-                    style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-.02em", color: "var(--pulse-blue-deep)" }}
-                  >
-                    Pulse
-                  </span>
-                  <span style={{ fontSize: 11.5, color: "var(--text-muted)", fontWeight: 500 }}>
-                    · Smart Demand Signals
-                  </span>
-                </div>
-              </div>
+            <InibsaLogo />
+            <span style={{ width: 1, height: 30, background: "var(--border)" }} />
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+              <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-.01em", color: "var(--pulse-blue-deep)" }}>
+                Pulse
+              </span>
+              <span style={{ fontSize: 11.5, color: "var(--text-muted)", fontWeight: 500 }}>
+                Alert Notification Center
+              </span>
             </div>
-            <span className="badge" style={{ background: "var(--pulse-blue-soft)", color: "var(--pulse-blue-deep)" }}>
-              Inibsa · Spain
-            </span>
           </div>
 
-          <nav
-            style={{
-              display: "flex",
-              gap: 4,
-              background: "#f4f9fc",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              padding: 3,
-            }}
-          >
-            <button className={"pill-tab " + (tab === "Dashboard" ? "active" : "")} onClick={() => setTab("Dashboard")}>
-              Dashboard
+          <nav style={{ display: "flex", gap: 4 }}>
+            <button className={"nav-link " + (tab === "alert" ? "active" : "")} onClick={() => setTab("alert")}>
+              <Inbox size={14} /> Alert Center
+              <span className="count">{activeCount}</span>
             </button>
-            <button className={"pill-tab " + (tab === "Metrics" ? "active" : "")} onClick={() => setTab("Metrics")}>
-              Metrics
+            <button className={"nav-link " + (tab === "dashboard" ? "active" : "")} onClick={() => setTab("dashboard")}>
+              <BarChart3 size={14} /> Dashboard
+            </button>
+            <button className={"nav-link " + (tab === "metrics" ? "active" : "")} onClick={() => setTab("metrics")}>
+              <GaugeIcon size={14} /> Métricas
             </button>
           </nav>
 
@@ -2137,8 +2041,8 @@ export default function HomePage() {
               }}
             >
               <Radio size={13} style={{ color: "var(--pulse-blue)" }} />
-              <span style={{ fontSize: 11.5, color: "var(--text)" }}>
-                {statsLive ? "Signal engine online" : "Signal engine · offline mode"}
+              <span style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>
+                {statsLive ? "Signal engine online" : "Signal engine · offline"}
               </span>
               <span className="live-dot" />
             </div>
@@ -2148,18 +2052,19 @@ export default function HomePage() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 8,
-                background: "var(--pulse-blue)",
+                background: "var(--pulse-coral)",
                 color: "#fff",
                 border: "none",
                 borderRadius: 6,
                 padding: "9px 14px",
-                fontWeight: 600,
+                fontWeight: 700,
                 fontSize: 13,
                 cursor: "pointer",
                 transition: "background .15s",
+                boxShadow: "0 2px 0 rgba(192,67,47,.25)",
               }}
             >
-              <MessageCircle size={15} /> AI Copilot
+              <MessageCircle size={15} /> Copiloto IA
             </button>
           </div>
         </div>
@@ -2169,16 +2074,14 @@ export default function HomePage() {
         <div className="status-strip" style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <ShieldCheck size={15} style={{ color: "var(--pulse-blue-strong)" }} />
-            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>
-              ● LIVE
-            </span>
+            <span className="badge-soft" style={{ background: "#E8F6EE", color: "#15803d" }}>● LIVE</span>
             <span style={{ fontSize: 12.5, color: "var(--text)" }}>Signal engine online</span>
             <span style={{ color: "var(--text-faint)" }}>·</span>
-            <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>Last recalc {lastRecalc}</span>
+            <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>Last recalc 9 may 2026 · 09:14</span>
             <span style={{ color: "var(--text-faint)" }}>·</span>
-            <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>Data Jan 1, 2021 → Apr 30, 2025</span>
+            <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>Datos 1 ene 2021 → 30 abr 2025</span>
             <span style={{ color: "var(--text-faint)" }}>·</span>
-            <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>{todayStr}</span>
+            <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>Hoy, 10 may 2026</span>
           </div>
           <div
             style={{
@@ -2193,16 +2096,16 @@ export default function HomePage() {
           >
             <AlertTriangle size={12} style={{ color: "var(--amber-text)" }} />
             <span style={{ fontSize: 11.5, color: "var(--amber-text)" }}>
-              Competitor activity is inferred, not observed directly
+              La actividad de competencia se infiere, no se observa directamente
             </span>
           </div>
         </div>
 
-        {tab === "Dashboard" ? (
-          <DashboardView stats={stats} alerts={alerts} totalAlerts={totalAlerts} />
-        ) : (
-          <MetricsView metrics={metrics} />
+        {tab === "alert" && (
+          <AlertCenter alerts={alerts} setAlerts={setAlerts} stats={stats} metrics={metrics} onToast={onToast} />
         )}
+        {tab === "dashboard" && <DashboardView alerts={alerts} />}
+        {tab === "metrics" && <MetricsView metrics={metrics} />}
 
         <div
           style={{
@@ -2214,10 +2117,26 @@ export default function HomePage() {
             fontSize: 11,
           }}
         >
-          <span>Pulse v0.4 · internal prototype · 2026</span>
-          <span>Own baseline · Uncaptured demand · Expected reorder</span>
+          <span>Pulse v0.5 · prototipo interno · 2026</span>
+          <span>Baseline propio · Demanda no capturada · Reposición esperada</span>
         </div>
       </main>
+
+      {toast && (
+        <div
+          className="toast"
+          style={
+            toast.kind === "error"
+              ? { background: "var(--pulse-coral-deep)" }
+              : toast.kind === "success"
+              ? { background: "#15803d" }
+              : undefined
+          }
+        >
+          {toast.kind === "error" ? <AlertTriangle size={14} /> : <CheckCircle size={14} />}
+          {toast.msg}
+        </div>
+      )}
 
       <Chat open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
